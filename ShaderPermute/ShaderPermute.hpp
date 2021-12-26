@@ -339,6 +339,7 @@ static const lookup glslLookup = {{"next", next}};
 class PermuteGLSL {
 public:
   inline static GenerateOutput generate(const GenerateInput input) {
+    lookupCounter.clear();
     auto output = PermuteText::generate(input);
     if (output.type == OutputType::ERROR)
       return output;
@@ -390,6 +391,12 @@ public:
   inline bool success() { return output.type != OutputType::ERROR; }
 
   inline std::string getContent() { return output.output; }
+
+  inline std::vector<unsigned int> getBinary() {
+    if (output.type != OutputType::BINARY)
+      return {};
+    return std::move(output.data);
+  }
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
                       const Permute &nlohmann_json_t) {

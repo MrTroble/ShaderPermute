@@ -8,6 +8,8 @@ int main() {
   perm.generate();
   perm.generate({"NORMAL"});
   perm.generate({"TEXCOORD_0"});
+  perm.generate({"TEXCOORD_0", "NORMAL", "COLOR"});
   std::cout << perm.getContent();
   return 0;
 }
+	

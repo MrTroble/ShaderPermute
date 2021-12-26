@@ -13,6 +13,13 @@
     },
     {
       "code": [
+        "$next_in vec4 COLOR;",
+        "$next_out vec4 COLOROUT;"
+      ],
+      "dependsOn":  ["COLOR"]
+    },
+    {
+      "code": [
         "$next_in vec3 TEXCOORD_0;",
         "$next_out vec3 UV;"
       ],
@@ -41,6 +48,12 @@
         "UV = TEXCOORD_0;"
       ],
       "dependsOn": [ "TEXCOORD_0" ]
+    },
+    {
+      "code": [
+        "COLOROUT = COLOR;"
+      ],
+      "dependsOn": ["COLOR"]
     },
     {
       "code": [
