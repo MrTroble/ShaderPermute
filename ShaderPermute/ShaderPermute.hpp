@@ -6,6 +6,10 @@
 #include <string>
 #include <vector>
 
+#ifndef SPR_NO_FSTREAM
+#include <fstream>
+#endif
+
 #ifndef SPR_NO_JSON_HPP_INCLUDE
 #include "json.hpp"
 #endif
@@ -186,20 +190,22 @@ constexpr TBuiltInResource defaultTBuiltInResource = {
 using lookup =
     std::map<std::string, std::function<std::string(const std::string &)>>;
 
-enum class InputType { REQUIRED = 1 };
+enum class ShaderCodeFlags { NONE = 0, REQUIRED = 1 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(InputType, {{InputType::REQUIRED, "required"}})
+NLOHMANN_JSON_SERIALIZE_ENUM(ShaderCodeFlags,
+                             {{ShaderCodeFlags::NONE, "none"},
+                              {ShaderCodeFlags::REQUIRED, "required"}})
 
 enum class OutputType { ERROR, TEXT, BINARY };
 
-inline bool isRequired(const uint32_t flag) {
-  return flag & (int)InputType::REQUIRED;
+inline bool isRequired(const ShaderCodeFlags flag) {
+  return (int)flag & (int)ShaderCodeFlags::REQUIRED;
 }
 
 template <class T> inline bool isInDependency(T &dependency, T &dependsOn) {
+  const auto endItr = end(dependency);
   for (auto target : dependsOn) {
     auto itr = begin(dependency);
-    const auto endItr = end(dependency);
     if (std::find(itr, endItr, target) == endItr)
       return false;
   }
@@ -208,7 +214,7 @@ template <class T> inline bool isInDependency(T &dependency, T &dependsOn) {
 
 struct ShaderCodes {
   std::vector<std::string> code;
-  unsigned int flags = 0;
+  ShaderCodeFlags flags = ShaderCodeFlags::NONE;
   std::vector<std::string> dependsOn;
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
@@ -279,9 +285,10 @@ inline void postProcess(std::string &codePart, const lookup &callback) {
     if (startWordItr != eItr && *itr == ' ') {
       const std::string param(paramStartItr, itr);
       const auto replace = func(param);
+      const auto distance = std::distance(startWordItr, itr);
       codePart = codePart.replace(startWordItr - 1, itr, replace);
       eItr = end(codePart);
-      itr = begin(codePart);
+      itr = begin(codePart) + distance;
       startWordItr = eItr;
     }
   }
@@ -400,4 +407,16 @@ public:
 template <class T> inline Permute<T> fromJson(nlohmann::json json) {
   return json.get<Permute<T>>();
 }
+
+#ifndef SPR_NO_FSTREAM
+template <class T> inline Permute<T> fromFile(std::string path) {
+  std::ifstream inputfile(path);
+  if (!inputfile.good())
+    throw std::runtime_error("File not found!");
+  nlohmann::json json;
+  inputfile >> json;
+  return fromJson<T>(json);
+}
+#endif
+
 } // namespace permute

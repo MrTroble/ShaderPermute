@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "shaderType": "vertex",
+    "targetVersion": "vulkan_1_2"
+  },
+  "codes": [
+    {
+      "code": [
+        "$next_in vec3 POSITION;",
+        "$next_out vec3 POSITIONOUT;"
+      ],
+      "flags": "required"
+    },
+    {
+      "code": [
+        "$next_in vec3 TEXCOORD_0;",
+        "$next_out vec3 UV;"
+      ],
+      "dependsOn": [ "TEXCOORD_0" ]
+    },
+    {
+      "code": [
+        "$next_in vec3 NORMAL;",
+        "$next_out vec3 NORMALOUT;"
+      ],
+      "dependsOn": [ "NORMAL" ]
+    },
+    {
+      "code": [
+        "$next_ublock { mat4 model; } ublock_0;",
+        "$next_ublock { mat4 vp;} ublock_1;",
+        "out gl_PerVertex { vec4 gl_Position; };",
+        "void main() {",
+        "gl_Position = ublock_1.vp * ublock_0.model * vec4(POSITION, 1);",
+        "POSITIONOUT = gl_Position.xyz;"
+      ],
+      "flags": "required"
+    },
+    {
+      "code": [
+        "UV = TEXCOORD_0;"
+      ],
+      "dependsOn": [ "TEXCOORD_0" ]
+    },
+    {
+      "code": [
+        "vec4 _tempNorm = vec4(NORMAL, 1) * ublock_0.model;",
+        "NORMALOUT = _tempNorm.xyz;"
+      ],
+      "dependsOn": [ "NORMAL" ]
+    },
+    {
+      "code": [
+        "}"
+      ],
+      "flags": "required"
+    }
+  ]
+}

@@ -8,4 +8,4 @@ SET(CMAKE_CXX_STANDARD 23)
 project ("ShaderPermute")
 
 # Include sub-projects.
-add_subdirectory ("ShaderPermute")
+add_subdirectory ("ShaderPermute/ShaderPermuteTest")
