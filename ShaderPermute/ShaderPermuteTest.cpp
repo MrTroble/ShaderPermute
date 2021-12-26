@@ -11,7 +11,7 @@ int main()
 		throw std::runtime_error("File not found!");
 	nlohmann::json json;
 	inputfile >> json;
-	auto perm = permute::fromJson<permute::PermuteText>(json);
+	auto perm = permute::fromJson<permute::PermuteGLSL>(json);
 	perm.generate();
 	std::cout << perm.getContent();
 	return 0;

@@ -4,10 +4,26 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <format>
 
 #ifndef SPR_NO_JSON_HPP_INCLUDE
 #include "json.hpp"
 #endif
+
+#define SPR_OPTIONAL_FROM(v1)\
+	const auto eItr = end(nlohmann_json_j);\
+	const auto itr = nlohmann_json_j.find(#v1);\
+	(*itr).get_to(nlohmann_json_t.v1);
+
+#define SPR_OPTIONAL_TO(v1)\
+    if(!((bool)nlohmann_json_t.v1)) {\
+		NLOHMANN_JSON_TO(v1);\
+	}
+
+#define SPR_OPTIONAL_TO_L(v1)\
+    if(!((bool)nlohmann_json_t.v1.empty())) {\
+		NLOHMANN_JSON_TO(v1);\
+	}
 
 #if !defined (SPR_NO_GLSL) && !defined (SPR_NO_GLSL_INCLUDE)
 #include <glslang/Public/ShaderLang.h>
@@ -15,179 +31,6 @@
 #endif
 
 namespace permute {
-
-	constexpr TBuiltInResource defaultTBuiltInResource;
-
-	enum class InputType {
-		REQUIRED = 1
-	};
-
-	enum class OutputType {
-		ERROR,
-		TEXT,
-		BINARY
-	};
-
-	inline bool isRequired(const uint32_t flag) {
-		return flag & (int)InputType::REQUIRED;
-	}
-
-	template<class T>
-	inline bool isInDependency(T& dependency, T& dependsOn) {
-		for (auto target : dependsOn) {
-			auto itr = begin(dependency);
-			const auto endItr = end(dependency);
-			if (std::find(itr, endItr, target) == endItr)
-				return false;
-		}
-		return true;
-	}
-
-	struct ShaderCodes {
-		std::vector<std::string> code;
-		unsigned int flags;
-		std::vector<std::string> dependsOn;
-
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(ShaderCodes, code, dependsOn, flags)
-	};
-
-	struct GenerateInput {
-		const std::vector<ShaderCodes>& codes;
-		const std::vector<std::string>& dependencies;
-		const nlohmann::json& settings;
-		const std::map<std::string, std::function<std::string()>>& translationTable;
-	};
-
-	struct GenerateOutput {
-		std::string output;
-		OutputType type = OutputType::ERROR;
-		std::vector<unsigned int> data;
-	};
-
-	class PermuteText {
-	public:
-		inline static GenerateOutput generate(const GenerateInput input) {
-			std::stringstream buffer;
-			for (const auto& code : input.codes) {
-				if (isRequired(code.flags) || isInDependency(input.dependencies, code.dependsOn)) {
-				}
-			}
-			return { buffer.str(), OutputType::TEXT };
-		}
-	};
-
-#ifndef SPR_NO_GLSL
-	struct GlslSettings {
-		EShLanguage shaderType;
-		glslang::EShClient targetClient;
-		glslang::EShTargetClientVersion targetVersion;
-		glslang::EShTargetLanguage targetLanguage;
-		glslang::EShTargetLanguageVersion targetLanguageVersion;
-
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(GlslSettings, shaderType, targetClient, targetVersion, targetLanguage, targetLanguageVersion)
-	};
-
-	class PermuteGLSL {
-	public:
-		inline static GenerateOutput generate(const GenerateInput input) {
-			const auto output = PermuteText::generate(input);
-			if (output.type == OutputType::ERROR)
-				return output;
-			try
-			{
-				const GlslSettings settings = input.settings.get<GlslSettings>();
-				glslang::TShader shader(settings.shaderType);
-				const auto stringPtr = output.output.c_str();
-				shader.setStrings(&stringPtr, 1);
-				shader.setEnvInput(glslang::EShSourceGlsl, settings.shaderType, settings.targetClient, 100);
-				shader.setEnvClient(settings.targetClient, settings.targetVersion);
-				shader.setEnvTarget(settings.targetLanguage, settings.targetLanguageVersion);
-				if (!shader.parse(&defaultTBuiltInResource, 450, true, EShMessages::EShMsgVulkanRules)) {
-					return { shader.getInfoLog(), OutputType::ERROR };
-				}
-				const auto interm = shader.getIntermediate();
-				std::vector<unsigned int> outputData;
-				glslang::GlslangToSpv(*interm, outputData);
-			}
-			catch (const std::exception&)
-			{
-				return { "Could not parse glsl settings!", OutputType::ERROR };
-			}
-			return {};
-		}
-	};
-#endif
-
-	const std::map<std::string, std::function<std::string>> SHADER_REPLACE = {
-		{"", [&](std::string in) { return ""; }}, 		{"", [&](std::string in) { return ""; }}
-	};
-
-	template<class T>
-	class Permute {
-
-	private:
-		std::vector<ShaderCodes> codes;
-		nlohmann::json settings;
-		GenerateOutput output;
-
-	public:
-		inline void preProcess(const std::map<std::string, std::function<std::string>> &callback) {
-			for (auto& code : codes) {
-				for (auto& codePart : code.code) {
-					const auto eItr = end(codePart);
-					auto startWordItr = eItr;
-					auto endWordItr = eItr;
-					auto paramStartItr = eItr;
-					std::function<std::string> func(nullptr);
-					for (auto itr = codePart.begin(); itr != eItr; itr++) {
-						if (*itr == '§') {
-							startWordItr = itr + 1;
-							continue;
-						}
-						if (startWordItr != eItr && *itr == '_') {
-							endWordItr = itr;
-							const auto word = std::string(startWordItr, itr);
-							const auto fncItr = callback.find(word);
-							if (fncItr != end(callback)) {
-								func = std::move(*fncItr);
-								paramStartItr = itr + 1;
-							}
-							else {
-								startWordItr = eItr;
-							}
-							continue;
-						}
-						if (startWordItr != eItr && *itr == ' ') {
-							const auto replace = func(std::string(paramStartItr, itr));
-							codePart.replace(startWordItr, endWordItr, replace);
-						}
-					}
-				}
-			}
-		}
-
-		inline bool generate(const std::vector<std::string>& dependencies = {}) {
-			const GenerateInput input = { codes, dependencies, settings };
-			output = T::generate(input);
-			return success();
-		}
-
-		inline bool success() {
-			return output.type != OutputType::ERROR;
-		}
-
-		inline std::string getContent() {
-			return output.output;
-		}
-
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(Permute<T>, codes, settings)
-	};
-
-	template<class T>
-	inline Permute<T> fromJson(nlohmann::json json) {
-		return json.get<Permute<T>>();
-	}
-
 
 	constexpr TBuiltInResource defaultTBuiltInResource = {
 		/* .MaxLights = */ 32,
@@ -296,4 +139,215 @@ namespace permute {
 			/* .generalVariableIndexing = */ 1,
 			/* .generalConstantMatrixVectorIndexing = */ 1,
 		} };
+
+	using lookup = std::map<std::string, std::function<std::string(const std::string&)>>;
+
+	enum class InputType {
+		REQUIRED = 1
+	};
+
+	enum class OutputType {
+		ERROR,
+		TEXT,
+		BINARY
+	};
+
+	inline bool isRequired(const uint32_t flag) {
+		return flag & (int)InputType::REQUIRED;
+	}
+
+	template<class T>
+	inline bool isInDependency(T& dependency, T& dependsOn) {
+		for (auto target : dependsOn) {
+			auto itr = begin(dependency);
+			const auto endItr = end(dependency);
+			if (std::find(itr, endItr, target) == endItr)
+				return false;
+		}
+		return true;
+	}
+
+	struct ShaderCodes {
+		std::vector<std::string> code;
+		unsigned int flags = 0;
+		std::vector<std::string> dependsOn;
+
+		friend void to_json(nlohmann::json& nlohmann_json_j, const ShaderCodes& nlohmann_json_t) {
+			NLOHMANN_JSON_TO(code);
+			SPR_OPTIONAL_TO(flags)
+			SPR_OPTIONAL_TO_L(dependsOn);
+		}
+
+		friend void from_json(const nlohmann::json& nlohmann_json_j, ShaderCodes& nlohmann_json_t) {
+			NLOHMANN_JSON_FROM(code);
+			SPR_OPTIONAL_FROM(flags);
+			SPR_OPTIONAL_FROM(dependsOn);
+		}
+
+	};
+
+	struct GenerateInput {
+		const std::vector<ShaderCodes>& codes;
+		const std::vector<std::string>& dependencies;
+		const nlohmann::json& settings;
+	};
+
+	struct GenerateOutput {
+		std::string output;
+		OutputType type = OutputType::ERROR;
+		std::vector<unsigned int> data;
+	};
+
+	class PermuteText {
+	public:
+
+		inline static GenerateOutput generate(const GenerateInput input) {
+			std::stringstream buffer;
+			for (const auto& code : input.codes) {
+				if (isRequired(code.flags) || isInDependency(input.dependencies, code.dependsOn)) {
+					for (const auto& codePart : code.code)
+						buffer << codePart << std::endl;
+				}
+			}
+			return { buffer.str(), OutputType::TEXT };
+		}
+	};
+
+	inline void postProcess(std::string& codePart, const lookup& callback) {
+		if (callback.empty()) return;
+		auto eItr = end(codePart);
+		auto startWordItr = eItr;
+		auto paramStartItr = eItr;
+		lookup::value_type::second_type func(nullptr);
+		for (auto itr = codePart.begin(); itr != eItr; itr++) {
+			if (*itr == '$') {
+				startWordItr = itr + 1;
+				continue;
+			}
+			if (startWordItr != eItr && *itr == '_') {
+				const auto word = std::string(startWordItr, itr);
+				const auto fncItr = callback.find(word);
+				if (fncItr != end(callback)) {
+					func = fncItr->second;
+					paramStartItr = itr + 1;
+				}
+				else {
+					startWordItr = eItr;
+				}
+				continue;
+			}
+			if (startWordItr != eItr && *itr == ' ') {
+				const std::string param(paramStartItr, itr);
+				const auto replace = func(param);
+				codePart = codePart.replace(startWordItr - 1, itr, replace);
+				eItr = end(codePart);
+				itr = begin(codePart);
+				startWordItr = eItr;
+			}
+		}
+	}
+
+#ifndef SPR_NO_GLSL
+	struct GlslSettings {
+		EShLanguage shaderType;
+		glslang::EShClient targetClient;
+		glslang::EShTargetClientVersion targetVersion;
+		glslang::EShTargetLanguage targetLanguage;
+		glslang::EShTargetLanguageVersion targetLanguageVersion;
+
+		NLOHMANN_DEFINE_TYPE_INTRUSIVE(GlslSettings, shaderType, targetClient, targetVersion, targetLanguage, targetLanguageVersion)
+	};
+
+	static std::map<std::string, int> lookupCounter;
+
+	std::string next(const std::string& input) {
+		const auto id = lookupCounter[input];
+		lookupCounter[input]++;
+		if (input == "ublock")
+			return std::format("layout(binding={}) uniform BLOCK{}", id, id);
+		return std::format("layout(location={}) {}", id, input);
+	}
+
+	static const lookup glslLookup = {
+		{"next", next}
+	};
+
+
+	class PermuteGLSL {
+	public:
+
+		inline static GenerateOutput generate(const GenerateInput input) {
+			auto output = PermuteText::generate(input);
+			if (output.type == OutputType::ERROR)
+				return output;
+			try
+			{
+				glslang::InitializeProcess();
+				postProcess(output.output, glslLookup);
+				const auto stringPtr = output.output.c_str();
+				const GlslSettings settings = input.settings.get<GlslSettings>();
+				glslang::TShader shader(settings.shaderType);
+				shader.setStrings(&stringPtr, 1);
+				shader.setEnvInput(glslang::EShSourceGlsl, settings.shaderType, settings.targetClient, 100);
+				shader.setEnvClient(settings.targetClient, settings.targetVersion);
+				shader.setEnvTarget(settings.targetLanguage, settings.targetLanguageVersion);
+				if (!shader.parse(&defaultTBuiltInResource, 450, true, EShMessages::EShMsgVulkanRules)) {
+					return { shader.getInfoLog(), OutputType::ERROR };
+				}
+				const auto interm = shader.getIntermediate();
+				std::vector<unsigned int> outputData;
+				glslang::GlslangToSpv(*interm, outputData);
+				glslang::FinalizeProcess();
+				return { output.output, OutputType::BINARY, outputData };
+			}
+			catch (const std::exception&)
+			{
+				glslang::FinalizeProcess();
+				return { "Could not parse glsl settings!", OutputType::ERROR };
+			}
+			return {};
+		}
+	};
+
+#endif
+
+	template<class T>
+	class Permute {
+
+	private:
+		std::vector<ShaderCodes> codes;
+		nlohmann::json settings;
+		GenerateOutput output;
+
+	public:
+		inline bool generate(const std::vector<std::string>& dependencies = {}) {
+			const GenerateInput input = { codes, dependencies, settings };
+			output = T::generate(input);
+			return success();
+		}
+
+		inline bool success() {
+			return output.type != OutputType::ERROR;
+		}
+
+		inline std::string getContent() {
+			return output.output;
+		}
+
+		friend void to_json(nlohmann::json& nlohmann_json_j, const Permute& nlohmann_json_t) {
+			NLOHMANN_JSON_TO(codes);
+			SPR_OPTIONAL_TO_L(settings);
+		}
+
+		friend void from_json(const nlohmann::json& nlohmann_json_j, Permute& nlohmann_json_t) {
+			NLOHMANN_JSON_FROM(codes);
+			SPR_OPTIONAL_FROM(settings);
+		}
+
+	};
+
+	template<class T>
+	inline Permute<T> fromJson(nlohmann::json json) {
+		return json.get<Permute<T>>();
+	}
 }
