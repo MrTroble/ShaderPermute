@@ -1,10 +1,6 @@
 {
   "settings": {
-    "shaderType": 0,
-    "targetClient": 1,
-    "targetVersion": 4194304,
-    "targetLanguage": 1,
-    "targetLanguageVersion": 66816
+    "shaderType": 0
   },
   "codes": [
     {
@@ -12,8 +8,7 @@
         "$next_in vec3 POSITION;",
         "$next_out vec3 POSITIONOUT;"
       ],
-      "flags": 1,
-      "dependsOn": []
+      "flags": 1
     },
     {
       "code": [
@@ -22,16 +17,13 @@
         "out gl_PerVertex { vec4 gl_Position; };",
         "void main() { vec4 _tmpVEC = vec4(POSITION, 1);"
       ],
-      "flags": 1,
-      "dependsOn": []
+      "flags": 1
     },
-
     {
       "code": [
         "}"
       ],
-      "flags": 1,
-      "dependsOn": []
+      "flags": 1
     }
   ]
 }

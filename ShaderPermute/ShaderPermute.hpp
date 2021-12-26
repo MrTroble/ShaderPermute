@@ -11,9 +11,10 @@
 #endif
 
 #define SPR_OPTIONAL_FROM(v1)\
-	const auto eItr = end(nlohmann_json_j);\
-	const auto itr = nlohmann_json_j.find(#v1);\
-	(*itr).get_to(nlohmann_json_t.v1);
+	const auto eItr##v1 = end(nlohmann_json_j);\
+	const auto itr##v1 = nlohmann_json_j.find(#v1);\
+	if(eItr##v1 != itr##v1)\
+		(*itr##v1).get_to(nlohmann_json_t.v1);
 
 #define SPR_OPTIONAL_TO(v1)\
     if(!((bool)nlohmann_json_t.v1)) {\
@@ -174,7 +175,7 @@ namespace permute {
 
 		friend void to_json(nlohmann::json& nlohmann_json_j, const ShaderCodes& nlohmann_json_t) {
 			NLOHMANN_JSON_TO(code);
-			SPR_OPTIONAL_TO(flags)
+			SPR_OPTIONAL_TO(flags);
 			SPR_OPTIONAL_TO_L(dependsOn);
 		}
 
@@ -250,12 +251,26 @@ namespace permute {
 #ifndef SPR_NO_GLSL
 	struct GlslSettings {
 		EShLanguage shaderType;
-		glslang::EShClient targetClient;
-		glslang::EShTargetClientVersion targetVersion;
-		glslang::EShTargetLanguage targetLanguage;
-		glslang::EShTargetLanguageVersion targetLanguageVersion;
+		glslang::EShClient targetClient = glslang::EShClient::EShClientVulkan;
+		glslang::EShTargetClientVersion targetVersion = glslang::EShTargetClientVersion::EShTargetVulkan_1_0;
+		glslang::EShTargetLanguage targetLanguage = glslang::EShTargetLanguage::EShTargetSpv;
+		glslang::EShTargetLanguageVersion targetLanguageVersion = glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
 
-		NLOHMANN_DEFINE_TYPE_INTRUSIVE(GlslSettings, shaderType, targetClient, targetVersion, targetLanguage, targetLanguageVersion)
+		friend void to_json(nlohmann::json& nlohmann_json_j, const GlslSettings& nlohmann_json_t) {
+			NLOHMANN_JSON_TO(shaderType);
+			SPR_OPTIONAL_TO(targetClient);
+			SPR_OPTIONAL_TO(targetVersion);
+			SPR_OPTIONAL_TO(targetLanguage);
+			SPR_OPTIONAL_TO(targetLanguageVersion);
+		}
+
+		friend void from_json(const nlohmann::json& nlohmann_json_j, GlslSettings& nlohmann_json_t) {
+			NLOHMANN_JSON_FROM(shaderType);
+			SPR_OPTIONAL_FROM(targetClient);
+			SPR_OPTIONAL_FROM(targetVersion);
+			SPR_OPTIONAL_FROM(targetLanguage);
+			SPR_OPTIONAL_FROM(targetLanguageVersion);
+		}
 	};
 
 	static std::map<std::string, int> lookupCounter;
