@@ -1,6 +1,7 @@
 {
   "settings": {
-    "shaderType": 0
+    "shaderType": "vertex",
+    "targetVersion": "vulkan_1_2"
   },
   "codes": [
     {
@@ -8,7 +9,7 @@
         "$next_in vec3 POSITION;",
         "$next_out vec3 POSITIONOUT;"
       ],
-      "flags": 1
+      "flags": "required"
     },
     {
       "code": [
@@ -17,13 +18,13 @@
         "out gl_PerVertex { vec4 gl_Position; };",
         "void main() { vec4 _tmpVEC = vec4(POSITION, 1);"
       ],
-      "flags": 1
+      "flags": "required"
     },
     {
       "code": [
         "}"
       ],
-      "flags": 1
+      "flags": "required"
     }
   ]
 }
