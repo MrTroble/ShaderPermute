@@ -1,0 +1,23 @@
+{
+  "settings": {
+
+  },
+  "codes": [
+    {
+      "code": [
+        "§next_in vec3 POSITION;",
+        "§next_out vec3 POSITIONOUT;"
+      ]
+    },
+    {
+      "code": [
+        "layout(binding=2) uniform UBLOCK_0 {mat4 model;} ublock_0;",
+        "layout(binding=3) uniform UBLOCK_1 { mat4 vp;} ublock_1;",
+        "out gl_PerVertex { vec4 gl_Position; };",
+        "void main() { vec4 _tmpVEC = vec4(POSITION, 1);"
+      ],
+      "flags": 1,
+      "dependsOn": []
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+[submodule "ShaderPermute/glslang"]
+	path = ShaderPermute/glslang
+	url = https://github.com/KhronosGroup/glslang

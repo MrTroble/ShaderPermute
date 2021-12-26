@@ -1,0 +1,26 @@
+layout(location=0) in vec3 NORMAL;
+layout(location=1) in vec3 POSITION;
+layout(location=2) in vec2 TEXCOORD_0;
+
+layout(location=0) out vec3 POSOUT;
+layout(location=1) out vec2 UV;
+layout(location=2) out vec3 NORMALOUT;
+
+layout(binding=2) uniform UBLOCK_0 {
+mat4 model;} ublock_0;
+layout(binding=3) uniform UBLOCK_1 {
+mat4 vp;} ublock_1;
+
+
+out gl_PerVertex { vec4 gl_Position; };
+void main() {
+vec4 _tmpVEC = vec4(POSITION, 1);
+vec4 _tmp1 = ublock_0.model * _tmpVEC;
+vec4 _tmp2 = ublock_1.vp * _tmp1;
+gl_Position = _tmp2;
+POSOUT = _tmp1.xyz;
+UV = TEXCOORD_0;
+vec4 _tempNorm = vec4(NORMAL, 1) * ublock_0.model;
+NORMALOUT = _tempNorm.xyz;
+
+}
