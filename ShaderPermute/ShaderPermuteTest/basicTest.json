@@ -40,8 +40,7 @@
         "void main() {",
         "gl_Position = ublock_1.vp * ublock_0.model * vec4(POSITION, 1);",
         "POSITIONOUT = gl_Position.xyz;"
-      ],
-      "flags": "required"
+      ]
     },
     {
       "code": [

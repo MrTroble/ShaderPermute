@@ -14,6 +14,12 @@
 #include "json.hpp"
 #endif
 
+#if defined(_NODISCARD) && !(defined(SPR_DISABLE_NODISCARD))
+#define SPR_NODISCARD _NODISCARD
+#elif !(defined(SPR_NODISCARD))
+#define SPR_NODISCARD
+#endif
+
 #define SPR_OPTIONAL_FROM(v1)                                                  \
   const auto eItr##v1 = end(nlohmann_json_j);                                  \
   const auto itr##v1 = nlohmann_json_j.find(#v1);                              \
@@ -198,11 +204,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(ShaderCodeFlags,
 
 enum class OutputType { ERROR, TEXT, BINARY };
 
-inline bool isRequired(const ShaderCodeFlags flag) {
+SPR_NODISCARD inline bool isRequired(const ShaderCodeFlags flag) {
   return (int)flag & (int)ShaderCodeFlags::REQUIRED;
 }
 
-template <class T> inline bool isInDependency(T &dependency, T &dependsOn) {
+template <class T>
+SPR_NODISCARD inline bool isInDependency(T &dependency, T &dependsOn) {
   const auto endItr = end(dependency);
   for (auto target : dependsOn) {
     auto itr = begin(dependency);
@@ -246,16 +253,17 @@ struct GenerateOutput {
 
 class PermuteText {
 public:
-  inline static GenerateOutput generate(const GenerateInput input) {
+  SPR_NODISCARD inline static GenerateOutput
+  generate(const GenerateInput input) {
     std::stringstream buffer;
     for (const auto &code : input.codes) {
-      if (isRequired(code.flags) ||
+      if (isRequired(code.flags) || code.dependsOn.empty() ||
           isInDependency(input.dependencies, code.dependsOn)) {
         for (const auto &codePart : code.code)
           buffer << codePart << std::endl;
       }
     }
-    return {buffer.str(), OutputType::TEXT};
+    return {std::move(buffer.str()), OutputType::TEXT};
   }
 };
 
@@ -338,15 +346,15 @@ static const lookup glslLookup = {{"next", next}};
 
 class PermuteGLSL {
 public:
-  inline static GenerateOutput generate(const GenerateInput input) {
+  SPR_NODISCARD inline static GenerateOutput
+  generate(const GenerateInput input) {
     lookupCounter.clear();
     auto output = PermuteText::generate(input);
     if (output.type == OutputType::ERROR)
       return output;
     try {
-      glslang::InitializeProcess();
       postProcess(output.output, glslLookup);
-      const auto stringPtr = output.output.c_str();
+      auto stringPtr = output.output.c_str();
       const GlslSettings settings = input.settings.get<GlslSettings>();
       glslang::TShader shader(settings.shaderType);
       shader.setStrings(&stringPtr, 1);
@@ -355,17 +363,16 @@ public:
       shader.setEnvClient(settings.targetClient, settings.targetVersion);
       shader.setEnvTarget(settings.targetLanguage,
                           settings.targetLanguageVersion);
-      if (!shader.parse(&defaultTBuiltInResource, 450, true,
-                        EShMessages::EShMsgVulkanRules)) {
+      if (!shader.parse(&defaultTBuiltInResource, 450, false,
+                        EShMessages::EShMsgDefault)) {
         return {shader.getInfoLog(), OutputType::ERROR};
       }
       const auto interm = shader.getIntermediate();
       std::vector<unsigned int> outputData;
       glslang::GlslangToSpv(*interm, outputData);
-      glslang::FinalizeProcess();
-      return {output.output, OutputType::BINARY, outputData};
+      return {std::move(output.output), OutputType::BINARY,
+              std::move(outputData)};
     } catch (const std::exception &) {
-      glslang::FinalizeProcess();
       return {"Could not parse glsl settings!", OutputType::ERROR};
     }
     return {};
@@ -382,20 +389,29 @@ private:
   GenerateOutput output;
 
 public:
-  inline bool generate(const std::vector<std::string> &dependencies = {}) {
+  SPR_NODISCARD inline bool
+  generate(const std::vector<std::string> &dependencies = {}) {
     const GenerateInput input = {codes, dependencies, settings};
     output = T::generate(input);
     return success();
   }
 
-  inline bool success() { return output.type != OutputType::ERROR; }
+  SPR_NODISCARD inline bool success() const {
+    return output.type != OutputType::ERROR;
+  }
 
-  inline std::string getContent() { return output.output; }
+  SPR_NODISCARD inline std::string getContent() const { return output.output; }
 
-  inline std::vector<unsigned int> getBinary() {
+  SPR_NODISCARD inline std::vector<unsigned int> getBinary() const {
     if (output.type != OutputType::BINARY)
       return {};
     return std::move(output.data);
+  }
+
+  inline void toBinaryFile(const std::string &path) {
+    std::ofstream output(path, std::ios_base::binary);
+    const auto &data = this->output.data;
+    output.write((char*)data.data(), data.size() * sizeof(unsigned int));
   }
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
@@ -411,12 +427,12 @@ public:
   }
 };
 
-template <class T> inline Permute<T> fromJson(nlohmann::json json) {
+template <class T> inline Permute<T> fromJson(const nlohmann::json &json) {
   return json.get<Permute<T>>();
 }
 
 #ifndef SPR_NO_FSTREAM
-template <class T> inline Permute<T> fromFile(std::string path) {
+template <class T> inline Permute<T> fromFile(const std::string &path) {
   std::ifstream inputfile(path);
   if (!inputfile.good())
     throw std::runtime_error("File not found!");
