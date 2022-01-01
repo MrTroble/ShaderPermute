@@ -342,7 +342,16 @@ std::string next(const std::string &input) {
   return std::format("layout(location={}) {}", id, input);
 }
 
-static const lookup glslLookup = {{"next", next}};
+static lookup glslLookup = {{"next", next}};
+
+class ShaderTraverser : public glslang::TIntermTraverser {
+public:
+    virtual void postProcess() = 0;
+
+    virtual bool isValid(const GlslSettings &settings) = 0;
+};
+
+static std::vector<ShaderTraverser*> traverser;
 
 class PermuteGLSL {
 public:
@@ -368,6 +377,13 @@ public:
         return {shader.getInfoLog(), OutputType::ERROR};
       }
       const auto interm = shader.getIntermediate();
+      const auto node = interm->getTreeRoot();
+      for (const auto travPtr : traverser) {
+        if (!travPtr->isValid(settings))
+          continue;
+        node->traverse(travPtr);
+        travPtr->postProcess();
+      }
       std::vector<unsigned int> outputData;
       glslang::GlslangToSpv(*interm, outputData);
       return {std::move(output.output), OutputType::BINARY,
