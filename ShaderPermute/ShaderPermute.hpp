@@ -1,6 +1,12 @@
 ﻿#pragma once
 
+#ifdef __cpp_lib_format
+#define SPR_USE_FORMAT_LIB 1
+#endif
+#ifdef SPR_USE_FORMAT_LIB
 #include <format>
+#endif // SPR_USE_FORMAT_LIB
+
 #include <functional>
 #include <map>
 #include <string>
@@ -337,21 +343,32 @@ static std::map<std::string, int> lookupCounter;
 std::string next(const std::string &input) {
   const auto id = lookupCounter[input];
   lookupCounter[input]++;
+#ifdef SPR_USE_FORMAT_LIB
   if (input == "ublock")
     return std::format("layout(binding={}) uniform BLOCK{}", id, id);
   return std::format("layout(location={}) {}", id, input);
+#else
+  std::stringstream strStream;
+  if (input == "ublock") {
+    strStream << "layout(binding=" << id << ") uniform BLOCK" << id;
+  } else {
+    strStream << "layout(location=" << id << ") " << input;
+  }
+  return strStream.str();
+#endif
+
 }
 
 static lookup glslLookup = {{"next", next}};
 
 class ShaderTraverser : public glslang::TIntermTraverser {
 public:
-    virtual void postProcess() = 0;
+  virtual void postProcess() = 0;
 
-    virtual bool isValid(const GlslSettings &settings) = 0;
+  virtual bool isValid(const GlslSettings &settings) = 0;
 };
 
-static std::vector<ShaderTraverser*> traverser;
+static std::vector<ShaderTraverser *> traverser;
 
 class PermuteGLSL {
 public:
@@ -421,17 +438,23 @@ public:
   SPR_NODISCARD inline std::vector<unsigned int> getBinary() const {
     if (output.type != OutputType::BINARY)
       return {};
-    return std::move(output.data);
+    return output.data;
+  }
+
+  SPR_NODISCARD inline nlohmann::json getSettings() const { return settings; }
+
+  template <class Settings> SPR_NODISCARD inline Settings getSettings() const {
+    return settings.get<Settings>();
   }
 
   inline void toBinaryFile(const std::string &path) const {
     std::ofstream output(path, std::ios_base::binary);
     const auto &data = this->output.data;
-    output.write((char*)data.data(), data.size() * sizeof(unsigned int));
+    output.write((char *)data.data(), data.size() * sizeof(unsigned int));
   }
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
-                      const Permute &nlohmann_json_t) const {
+                      const Permute &nlohmann_json_t) {
     NLOHMANN_JSON_TO(codes);
     SPR_OPTIONAL_TO_L(settings);
   }
