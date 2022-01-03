@@ -26,4 +26,4 @@ target_link_libraries(ShaderPermuteTest PUBLIC gtest_main)
 target_link_libraries(ShaderPermuteTest PUBLIC glslang SPIRV)
 target_include_directories(ShaderPermuteTest PUBLIC ${glslang_SOURCE_DIR})
 
-gtest_discover_tests(ShaderPermuteTest)
+gtest_add_tests(TARGET ShaderPermuteTest)
