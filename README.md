@@ -6,13 +6,13 @@ Simple library to generate shader permutations based on dependencies. Can also b
 
 ## Current features
 
-* Generate perumtations from a json
-* Generate SPIR-V code based on glsl code from the given perumtations
+* Generate permutations from a json
+* Generate SPIR-V code based on glsl code from the given permutations
 * Post-process glsl code before compilation via lookups
 
 ## Example
 
-if you want the intigrated glsl compiler use the `permute::PermuteGLSL` template 
+if you want the integrated glsl compiler use the `permute::PermuteGLSL` template
 
 ```cpp
   auto &perm = permute::fromFile<permute::PermuteGLSL>("shader.json");
@@ -29,6 +29,19 @@ loading from memory is also supported via `permute::fromJson`
 ```cpp
   auto &perm = permute::fromJson<PermuteText/GLSL>(js);
 ```
+
+use the generate function to generate a permutation based on some dependencies.
+Keep in mind that you need to call `glslang::InitializeProcess()` and `glslang::FinalizeProcess()`
+
+```cpp
+bool success = perm.generate(); // Generates SPIR-V/Text without dependencies
+```
+
+```cpp
+bool success = perm.generate({"COLOR"}) // Generates SPIR-V/Text with the COLOR dependency
+```
+
+Use the getter methods to retrieve the needed information afterwards
 
 ## Json structure
 
@@ -75,4 +88,3 @@ loading from memory is also supported via `permute::fromJson`
   ]
 }
 ```
-
