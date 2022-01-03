@@ -1,10 +1,9 @@
 ﻿#pragma once
 
-#ifdef __cpp_lib_format
-#define SPR_USE_FORMAT_LIB 1
-#endif
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
+#else
+#include <sstream>
 #endif // SPR_USE_FORMAT_LIB
 
 #include <functional>
