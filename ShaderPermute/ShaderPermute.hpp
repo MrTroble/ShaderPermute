@@ -406,7 +406,7 @@ private:
 
 public:
   SPR_NODISCARD inline bool
-  generate(const std::vector<std::string> &dependencies = {}) const {
+  generate(const std::vector<std::string> &dependencies = {}) {
     const GenerateInput input = {codes, dependencies, settings};
     output = T::generate(input);
     return success();
