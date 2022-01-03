@@ -406,7 +406,7 @@ private:
 
 public:
   SPR_NODISCARD inline bool
-  generate(const std::vector<std::string> &dependencies = {}) {
+  generate(const std::vector<std::string> &dependencies = {}) const {
     const GenerateInput input = {codes, dependencies, settings};
     output = T::generate(input);
     return success();
@@ -424,14 +424,14 @@ public:
     return std::move(output.data);
   }
 
-  inline void toBinaryFile(const std::string &path) {
+  inline void toBinaryFile(const std::string &path) const {
     std::ofstream output(path, std::ios_base::binary);
     const auto &data = this->output.data;
     output.write((char*)data.data(), data.size() * sizeof(unsigned int));
   }
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
-                      const Permute &nlohmann_json_t) {
+                      const Permute &nlohmann_json_t) const {
     NLOHMANN_JSON_TO(codes);
     SPR_OPTIONAL_TO_L(settings);
   }
