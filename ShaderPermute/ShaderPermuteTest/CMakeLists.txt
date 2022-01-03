@@ -27,5 +27,3 @@ target_link_libraries(ShaderPermuteTest PUBLIC gtest_main)
 # The commands to add to your own project for glsl compiler support
 target_link_libraries(ShaderPermuteTest PUBLIC glslang SPIRV)
 target_include_directories(ShaderPermuteTest PUBLIC ${glslang_SOURCE_DIR})
-
-add_test(PermuteTest ShaderPermuteTest)

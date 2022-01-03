@@ -9,3 +9,4 @@ project ("ShaderPermute")
 
 # Include sub-projects.
 add_subdirectory ("ShaderPermute/ShaderPermuteTest")
+add_test(PermuteTest ShaderPermuteTest)
