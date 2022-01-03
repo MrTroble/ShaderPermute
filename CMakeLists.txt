@@ -6,7 +6,6 @@ cmake_minimum_required (VERSION 3.8)
 SET(CMAKE_CXX_STANDARD 23)
 
 project ("ShaderPermute")
-
+include(CTest)
 # Include sub-projects.
 add_subdirectory ("ShaderPermute/ShaderPermuteTest")
-add_test(PermuteTest ShaderPermuteTest)
