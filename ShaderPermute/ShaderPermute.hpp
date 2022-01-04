@@ -16,6 +16,10 @@
 */
 #pragma once
 
+#define SPR_VERSION_MAJOR 1
+#define SPR_VERSION_MINOR 0
+#define SPR_VERSION_PATCH 0
+
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
 #else
@@ -60,6 +64,10 @@
 #if !defined(SPR_NO_GLSL) && !defined(SPR_NO_GLSL_INCLUDE)
 #include <SPIRV/GlslangToSpv.h>
 #include <glslang/Public/ShaderLang.h>
+#endif
+
+#ifndef SPR_NO_STATIC
+#define SPR_STATIC static
 #endif
 
 #ifndef SPR_NO_GLSL
@@ -353,9 +361,9 @@ struct GlslSettings {
   }
 };
 
-static std::map<std::string, int> lookupCounter;
+SPR_STATIC std::map<std::string, int> lookupCounter;
 
-std::string next(const std::string &input) {
+SPR_STATIC std::string next(const std::string &input) {
   const auto id = lookupCounter[input];
   lookupCounter[input]++;
 #ifdef SPR_USE_FORMAT_LIB
@@ -373,7 +381,7 @@ std::string next(const std::string &input) {
 #endif
 }
 
-static lookup glslLookup = {{"next", next}};
+SPR_STATIC lookup glslLookup = {{"next", next}};
 
 class ShaderTraverser : public glslang::TIntermTraverser {
 public:
