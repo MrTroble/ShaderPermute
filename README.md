@@ -10,6 +10,24 @@ Simple library to generate shader permutations based on dependencies. Can also b
 * Generate SPIR-V code based on glsl code from the given permutations
 * Post-process glsl code before compilation via lookups
 
+## Installation
+
+Use cmake fetch content
+
+```cmake
+include(FetchContent)
+
+FETCHCONTENT_DECLARE(
+  permute
+  URL https://github.com/MrTroble/ShaderPermute/archive/refs/heads/master.zip
+)
+
+FETCHCONTENT_MAKEAVAILABLE(permute)
+
+target_include_directories(mytarget PUBLIC ${permute_SOURCE_DIR}/ShaderPermute)
+target_link_libraries(mytarget PUBLIC glslang SPIRV)
+```
+
 ## Example
 
 if you want the integrated glsl compiler use the `permute::PermuteGLSL` template
