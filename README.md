@@ -24,7 +24,7 @@ FETCHCONTENT_DECLARE(
 
 FETCHCONTENT_MAKEAVAILABLE(permute)
 
-target_include_directories(mytarget PUBLIC ${permute_SOURCE_DIR}/ShaderPermute)
+target_include_directories(mytarget PUBLIC ${permute_SOURCE_DIR}/ShaderPermute ${glslang_SOURCE_DIR})
 target_link_libraries(mytarget PUBLIC glslang SPIRV)
 ```
 
