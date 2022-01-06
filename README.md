@@ -9,6 +9,7 @@ Simple library to generate shader permutations based on dependencies. Can also b
 * Generate permutations from a json
 * Generate SPIR-V code based on glsl code from the given permutations
 * Post-process glsl code before compilation via lookups
+* Inspect intermediate code via traverser
 
 ## Installation
 
@@ -33,19 +34,19 @@ target_link_libraries(mytarget PUBLIC glslang SPIRV)
 if you want the integrated glsl compiler use the `permute::PermuteGLSL` template
 
 ```cpp
-  auto &perm = permute::fromFile<permute::PermuteGLSL>("shader.json");
+auto &perm = permute::fromFile<permute::PermuteGLSL>("shader.json");
 ```
 
 for just text with no lookups use `permute::PermuteText`
 
 ```cpp
-  auto &perm = permute::fromFile<permute::PermuteText>("text.json");
+auto &perm = permute::fromFile<permute::PermuteText>("text.json");
 ```
 
 loading from memory is also supported via `permute::fromJson`
 
 ```cpp
-  auto &perm = permute::fromJson<PermuteText/GLSL>(js);
+auto &perm = permute::fromJson<PermuteText/GLSL>(js);
 ```
 
 use the generate function to generate a permutation based on some dependencies.
@@ -60,6 +61,34 @@ bool success = perm.generate({"COLOR"}) // Generates SPIR-V/Text with the COLOR 
 ```
 
 Use the getter methods to retrieve the needed information afterwards
+
+### Inspect intermediate code
+
+Create a traverser
+
+```cpp
+class TestTraverser : public permute::ShaderTraverser {
+public:
+  bool visited = false;
+
+  TestTraverser() : permute::ShaderTraverser() {}
+
+  void visitSymbol(glslang::TIntermSymbol *) override { 
+    visited = true; 
+  }
+
+  bool isValid(const permute::GlslSettings &settings) override {  
+    return true; 
+  }
+};
+```
+
+Create a instance of the traverser before you generate your code. It will be automatically used for each generation until it is being deleted by RAII.
+
+```cpp
+TestTraverser tt;
+perm.generate();
+```
 
 ## Json structure
 

@@ -1,4 +1,4 @@
-﻿/* 
+﻿/*
    Copyright 2021 MrTroble
 
    Licensed under the Apache License,
@@ -18,7 +18,7 @@
 
 #define SPR_VERSION_MAJOR 1
 #define SPR_VERSION_MINOR 0
-#define SPR_VERSION_PATCH 0
+#define SPR_VERSION_PATCH 1
 
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
@@ -383,14 +383,85 @@ SPR_STATIC std::string next(const std::string &input) {
 
 SPR_STATIC lookup glslLookup = {{"next", next}};
 
-class ShaderTraverser : public glslang::TIntermTraverser {
-public:
-  virtual void postProcess() = 0;
+class ShaderTraverser;
+static std::vector<permute::ShaderTraverser *> traverser;
 
+class ShaderTraverser {
+public:
+  ShaderTraverser() { permute::traverser.push_back(this); }
+
+  ~ShaderTraverser() {
+    permute::traverser.erase(
+        std::remove(begin(permute::traverser), end(permute::traverser), this));
+  }
+
+  virtual void visitSymbol(glslang::TIntermSymbol *) {}
+  virtual void visitConstantUnion(glslang::TIntermConstantUnion *) {}
+  virtual bool visitBinary(glslang::TVisit, glslang::TIntermBinary *) {
+    return true;
+  }
+  virtual bool visitUnary(glslang::TVisit, glslang::TIntermUnary *) {
+    return true;
+  }
+  virtual bool visitSelection(glslang::TVisit, glslang::TIntermSelection *) {
+    return true;
+  }
+  virtual bool visitAggregate(glslang::TVisit, glslang::TIntermAggregate *) {
+    return true;
+  }
+  virtual bool visitLoop(glslang::TVisit, glslang::TIntermLoop *) {
+    return true;
+  }
+  virtual bool visitBranch(glslang::TVisit, glslang::TIntermBranch *) {
+    return true;
+  }
+  virtual bool visitSwitch(glslang::TVisit, glslang::TIntermSwitch *) {
+    return true;
+  }
+  virtual void postProcess() {}
   virtual bool isValid(const GlslSettings &settings) = 0;
 };
 
-static std::vector<ShaderTraverser *> traverser;
+namespace impl {
+
+class ShaderTraverser : public glslang::TIntermTraverser {
+public:
+  permute::ShaderTraverser *traverser;
+
+  ShaderTraverser(permute::ShaderTraverser *traverser) : traverser(traverser) {}
+
+  virtual void visitSymbol(glslang::TIntermSymbol *s) {
+    traverser->visitSymbol(s);
+  }
+
+  virtual void visitConstantUnion(glslang::TIntermConstantUnion *s) {
+    traverser->visitConstantUnion(s);
+  }
+
+  virtual bool visitBinary(glslang::TVisit v, glslang::TIntermBinary *s) {
+    return traverser->visitBinary(v, s);
+  }
+  virtual bool visitUnary(glslang::TVisit v, glslang::TIntermUnary *s) {
+    return traverser->visitUnary(v, s);
+  }
+  virtual bool visitSelection(glslang::TVisit v, glslang::TIntermSelection *s) {
+    return traverser->visitSelection(v, s);
+  }
+  virtual bool visitAggregate(glslang::TVisit v, glslang::TIntermAggregate *s) {
+    return traverser->visitAggregate(v, s);
+  }
+  virtual bool visitLoop(glslang::TVisit v, glslang::TIntermLoop *s) {
+    return traverser->visitLoop(v, s);
+  }
+  virtual bool visitBranch(glslang::TVisit v, glslang::TIntermBranch *s) {
+    return traverser->visitBranch(v, s);
+  }
+  virtual bool visitSwitch(glslang::TVisit v, glslang::TIntermSwitch *s) {
+    return traverser->visitSwitch(v, s);
+  }
+};
+
+} // namespace impl
 
 class PermuteGLSL {
 public:
@@ -420,7 +491,8 @@ public:
       for (const auto travPtr : traverser) {
         if (!travPtr->isValid(settings))
           continue;
-        node->traverse(travPtr);
+        impl::ShaderTraverser trav(travPtr);
+        node->traverse(&trav);
         travPtr->postProcess();
       }
       std::vector<unsigned int> outputData;
