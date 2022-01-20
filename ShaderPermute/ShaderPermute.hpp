@@ -18,7 +18,7 @@
 
 #define SPR_VERSION_MAJOR 1
 #define SPR_VERSION_MINOR 0
-#define SPR_VERSION_PATCH 1
+#define SPR_VERSION_PATCH 2
 
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
