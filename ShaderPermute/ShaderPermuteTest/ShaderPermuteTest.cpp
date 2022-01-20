@@ -61,6 +61,14 @@ TEST(glsl, writeBin) {
   ASSERT_NO_THROW(perm.toBinaryFile("testOutput.spv"));
 }
 
+TEST(glsl, testComplex) {
+  auto perm = permute::fromFile<permute::PermuteGLSL>("lightPassVert.json");
+  ASSERT_TRUE(perm.generate());
+
+  perm = permute::fromFile<permute::PermuteGLSL>("lightPassFrag.json");
+  ASSERT_TRUE(perm.generate());
+}
+
 TEST(text, equality) {
   nlohmann::json js = {{"codes", //
                         {
