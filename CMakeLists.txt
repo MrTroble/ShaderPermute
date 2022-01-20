@@ -16,13 +16,11 @@ FetchContent_Declare(
   glslang
   URL https://github.com/KhronosGroup/glslang/archive/c9706bdda0ac22b9856f1aa8261e5b9e15cd20c5.zip
 )
-FetchContent_MakeAvailable(glslang)
 
 FetchContent_Declare(
   materialx
   URL https://github.com/materialx/MaterialX/releases/download/v1.38.3/MaterialX_Windows_VS2022_x64_Python39.zip
 )
-FetchContent_MakeAvailable(materialx)
 
 # Include sub-projects.
 add_subdirectory ("ShaderPermute/ShaderPermuteTest")
