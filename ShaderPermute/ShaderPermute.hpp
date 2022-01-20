@@ -66,6 +66,10 @@
 #include <glslang/Public/ShaderLang.h>
 #endif
 
+#if defined(SPR_MATERIALX) && !defined(SPR_NO_MATERIALX_INCLUDE)
+#include <MaterialXGenGlsl/GlslShaderGenerator.h>
+#endif
+
 #ifndef SPR_NO_STATIC
 #define SPR_STATIC static
 #endif
@@ -340,7 +344,7 @@ struct GlslSettings {
   glslang::EShTargetLanguage targetLanguage =
       glslang::EShTargetLanguage::EShTargetSpv;
   glslang::EShTargetLanguageVersion targetLanguageVersion =
-      glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
+      glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
 
   friend void to_json(nlohmann::json &nlohmann_json_j,
                       const GlslSettings &nlohmann_json_t) {
@@ -463,6 +467,19 @@ public:
 
 } // namespace impl
 
+#ifdef SPR_MATERIALX
+class PermuteMaterialX {
+public:
+  SPR_NODISCARD inline static GenerateOutput
+  generate(const GenerateInput input) {
+    auto generator = MaterialX::GlslShaderGenerator::create();
+    auto doc = MaterialX::Document::createDocument();
+    generator->registerShaderMetadata()
+    auto shader = generator->generate("", );
+  }
+};
+#endif // SPR_NO_MATERIALX
+
 class PermuteGLSL {
 public:
   SPR_NODISCARD inline static GenerateOutput
@@ -483,7 +500,7 @@ public:
       shader.setEnvTarget(settings.targetLanguage,
                           settings.targetLanguageVersion);
       if (!shader.parse(&defaultTBuiltInResource, 450, false,
-                        EShMessages::EShMsgDefault)) {
+                        EShMessages::EShMsgVulkanRules)) {
         return {shader.getInfoLog(), OutputType::ERROR};
       }
       const auto interm = shader.getIntermediate();
