@@ -18,7 +18,7 @@
 
 #define SPR_VERSION_MAJOR 1
 #define SPR_VERSION_MINOR 0
-#define SPR_VERSION_PATCH 2
+#define SPR_VERSION_PATCH 3
 
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
@@ -118,7 +118,274 @@ NLOHMANN_JSON_SERIALIZE_ENUM(EShTargetLanguageVersion,
 
 namespace permute {
 
-constexpr TBuiltInResource defaultTBuiltInResource = {
+using lookup =
+    std::map<std::string, std::function<std::string(const std::string &)>>;
+
+enum class ShaderCodeFlags { NONE = 0, REQUIRED = 1 };
+
+NLOHMANN_JSON_SERIALIZE_ENUM(ShaderCodeFlags,
+                             {{ShaderCodeFlags::NONE, "none"},
+                              {ShaderCodeFlags::REQUIRED, "required"}})
+
+enum class OutputType { ERROR, TEXT, BINARY };
+
+SPR_NODISCARD inline bool isRequired(const ShaderCodeFlags flag) {
+  return (int)flag & (int)ShaderCodeFlags::REQUIRED;
+}
+
+template <class T>
+SPR_NODISCARD inline bool isInDependency(T &dependency, T &dependsOn) {
+  const auto endItr = end(dependency);
+  for (auto target : dependsOn) {
+    auto itr = begin(dependency);
+    if (std::find(itr, endItr, target) == endItr)
+      return false;
+  }
+  return true;
+}
+
+struct ShaderCodes {
+  std::vector<std::string> code;
+  ShaderCodeFlags flags = ShaderCodeFlags::NONE;
+  std::vector<std::string> dependsOn;
+
+  friend void to_json(nlohmann::json &nlohmann_json_j,
+                      const ShaderCodes &nlohmann_json_t) {
+    NLOHMANN_JSON_TO(code);
+    SPR_OPTIONAL_TO(flags);
+    SPR_OPTIONAL_TO_L(dependsOn);
+  }
+
+  friend void from_json(const nlohmann::json &nlohmann_json_j,
+                        ShaderCodes &nlohmann_json_t) {
+    NLOHMANN_JSON_FROM(code);
+    SPR_OPTIONAL_FROM(flags);
+    SPR_OPTIONAL_FROM(dependsOn);
+  }
+};
+
+struct GenerateInput {
+  const std::vector<ShaderCodes> &codes;
+  const std::vector<std::string> &dependencies;
+  const nlohmann::json &settings;
+};
+
+struct GenerateOutput {
+  std::vector<std::string> output;
+  OutputType type = OutputType::ERROR;
+  std::vector<unsigned int> data;
+  void *costumData = nullptr;
+};
+
+class PermuteText {
+public:
+  SPR_NODISCARD inline static GenerateOutput
+  generate(const GenerateInput input) {
+    std::vector<std::string> buffer;
+    buffer.reserve(input.codes.size());
+    for (const auto &code : input.codes) {
+      if (isRequired(code.flags) || code.dependsOn.empty() ||
+          isInDependency(input.dependencies, code.dependsOn)) {
+        for (const auto &codePart : code.code)
+          buffer.push_back(codePart);
+      }
+    }
+    return {buffer, OutputType::TEXT};
+  }
+};
+
+inline std::string postProcess(std::string &codePart, const lookup &callback) {
+  if (callback.empty())
+    return codePart;
+  auto eItr = end(codePart);
+  auto startWordItr = eItr;
+  auto paramStartItr = eItr;
+  lookup::value_type::second_type func(nullptr);
+  for (auto itr = begin(codePart); itr != eItr; itr++) {
+    if (*itr == '$') {
+      startWordItr = itr + 1;
+      continue;
+    }
+    if (startWordItr != eItr && *itr == '_') {
+      const auto word = std::string(startWordItr, itr);
+      const auto fncItr = callback.find(word);
+      if (fncItr != end(callback)) {
+        func = fncItr->second;
+        paramStartItr = itr + 1;
+      } else {
+        startWordItr = eItr;
+      }
+      continue;
+    }
+    if (startWordItr != eItr && *itr == ' ') {
+      const std::string param(paramStartItr, itr);
+      const auto replace = func(param);
+      const auto distance = std::distance(startWordItr, itr);
+      codePart = codePart.replace(startWordItr - 1, itr, replace);
+      eItr = end(codePart);
+      itr = begin(codePart) + distance;
+      startWordItr = eItr;
+    }
+  }
+  return codePart;
+}
+
+inline void postProcess(std::vector<std::string> &codePart,
+                        const lookup &callback) {
+  for (size_t i = 0; i < codePart.size(); i++) {
+    codePart[i] = postProcess(codePart[i], callback) + "\n";
+  }
+}
+
+#ifndef SPR_NO_GLSL
+struct GlslSettings {
+  EShLanguage shaderType;
+  glslang::EShClient targetClient = glslang::EShClient::EShClientVulkan;
+  glslang::EShTargetClientVersion targetVersion =
+      glslang::EShTargetClientVersion::EShTargetVulkan_1_0;
+  glslang::EShTargetLanguage targetLanguage =
+      glslang::EShTargetLanguage::EShTargetSpv;
+  glslang::EShTargetLanguageVersion targetLanguageVersion =
+      glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
+
+  friend void to_json(nlohmann::json &nlohmann_json_j,
+                      const GlslSettings &nlohmann_json_t) {
+    NLOHMANN_JSON_TO(shaderType);
+    SPR_OPTIONAL_TO(targetClient);
+    SPR_OPTIONAL_TO(targetVersion);
+    SPR_OPTIONAL_TO(targetLanguage);
+    SPR_OPTIONAL_TO(targetLanguageVersion);
+  }
+
+  friend void from_json(const nlohmann::json &nlohmann_json_j,
+                        GlslSettings &nlohmann_json_t) {
+    NLOHMANN_JSON_FROM(shaderType);
+    SPR_OPTIONAL_FROM(targetClient);
+    SPR_OPTIONAL_FROM(targetVersion);
+    SPR_OPTIONAL_FROM(targetLanguage);
+    SPR_OPTIONAL_FROM(targetLanguageVersion);
+  }
+};
+
+SPR_STATIC std::map<std::string, int> lookupCounter;
+
+SPR_STATIC std::string next(const std::string &input) {
+  const auto id = lookupCounter[input];
+  lookupCounter[input]++;
+#ifdef SPR_USE_FORMAT_LIB
+  if (input == "ublock")
+    return std::format("layout(binding={}) uniform BLOCK{}", id, id);
+  return std::format("layout(location={}) {}", id, input);
+#else
+  std::stringstream strStream;
+  if (input == "ublock") {
+    strStream << "layout(binding=" << id << ") uniform BLOCK" << id;
+  } else {
+    strStream << "layout(location=" << id << ") " << input;
+  }
+  return strStream.str();
+#endif
+}
+
+SPR_STATIC lookup glslLookup
+#ifndef SPR_NO_STATIC
+    = {{"next", next}}
+#endif // SPR_STATIC
+;
+
+class ShaderTraverser;
+static std::vector<permute::ShaderTraverser *> traverser;
+
+class ShaderTraverser {
+public:
+  ShaderTraverser() { permute::traverser.push_back(this); }
+
+  ~ShaderTraverser() {
+    permute::traverser.erase(
+        std::remove(begin(permute::traverser), end(permute::traverser), this));
+  }
+
+  virtual void visitSymbol(glslang::TIntermSymbol *) {}
+  virtual void visitConstantUnion(glslang::TIntermConstantUnion *) {}
+  virtual bool visitBinary(glslang::TVisit, glslang::TIntermBinary *) {
+    return true;
+  }
+  virtual bool visitUnary(glslang::TVisit, glslang::TIntermUnary *) {
+    return true;
+  }
+  virtual bool visitSelection(glslang::TVisit, glslang::TIntermSelection *) {
+    return true;
+  }
+  virtual bool visitAggregate(glslang::TVisit, glslang::TIntermAggregate *) {
+    return true;
+  }
+  virtual bool visitLoop(glslang::TVisit, glslang::TIntermLoop *) {
+    return true;
+  }
+  virtual bool visitBranch(glslang::TVisit, glslang::TIntermBranch *) {
+    return true;
+  }
+  virtual bool visitSwitch(glslang::TVisit, glslang::TIntermSwitch *) {
+    return true;
+  }
+  virtual void postProcess() {}
+  virtual bool isValid(const GlslSettings &settings) = 0;
+};
+
+namespace impl {
+
+class ShaderTraverser : public glslang::TIntermTraverser {
+public:
+  permute::ShaderTraverser *traverser;
+
+  ShaderTraverser(permute::ShaderTraverser *traverser) : traverser(traverser) {}
+
+  virtual void visitSymbol(glslang::TIntermSymbol *s) {
+    traverser->visitSymbol(s);
+  }
+
+  virtual void visitConstantUnion(glslang::TIntermConstantUnion *s) {
+    traverser->visitConstantUnion(s);
+  }
+
+  virtual bool visitBinary(glslang::TVisit v, glslang::TIntermBinary *s) {
+    return traverser->visitBinary(v, s);
+  }
+  virtual bool visitUnary(glslang::TVisit v, glslang::TIntermUnary *s) {
+    return traverser->visitUnary(v, s);
+  }
+  virtual bool visitSelection(glslang::TVisit v, glslang::TIntermSelection *s) {
+    return traverser->visitSelection(v, s);
+  }
+  virtual bool visitAggregate(glslang::TVisit v, glslang::TIntermAggregate *s) {
+    return traverser->visitAggregate(v, s);
+  }
+  virtual bool visitLoop(glslang::TVisit v, glslang::TIntermLoop *s) {
+    return traverser->visitLoop(v, s);
+  }
+  virtual bool visitBranch(glslang::TVisit v, glslang::TIntermBranch *s) {
+    return traverser->visitBranch(v, s);
+  }
+  virtual bool visitSwitch(glslang::TVisit v, glslang::TIntermSwitch *s) {
+    return traverser->visitSwitch(v, s);
+  }
+};
+
+} // namespace impl
+
+#ifdef SPR_MATERIALX
+class PermuteMaterialX {
+public:
+  SPR_NODISCARD inline static GenerateOutput
+  generate(const GenerateInput input) {
+    auto generator = MaterialX::GlslShaderGenerator::create();
+    auto doc = MaterialX::Document::createDocument();
+    generator->registerShaderMetadata() auto shader = generator->generate("", );
+  }
+};
+#endif // SPR_NO_MATERIALX
+
+const TBuiltInResource DefaultTBuiltInResource = {
     /* .MaxLights = */ 32,
     /* .MaxClipPlanes = */ 6,
     /* .MaxTextureUnits = */ 32,
@@ -211,10 +478,18 @@ constexpr TBuiltInResource defaultTBuiltInResource = {
     /* .maxTaskWorkGroupSizeY_NV = */ 1,
     /* .maxTaskWorkGroupSizeZ_NV = */ 1,
     /* .maxMeshViewCountNV = */ 4,
+    /* .maxMeshOutputVerticesEXT = */ 256,
+    /* .maxMeshOutputPrimitivesEXT = */ 256,
+    /* .maxMeshWorkGroupSizeX_EXT = */ 128,
+    /* .maxMeshWorkGroupSizeY_EXT = */ 128,
+    /* .maxMeshWorkGroupSizeZ_EXT = */ 128,
+    /* .maxTaskWorkGroupSizeX_EXT = */ 128,
+    /* .maxTaskWorkGroupSizeY_EXT = */ 128,
+    /* .maxTaskWorkGroupSizeZ_EXT = */ 128,
+    /* .maxMeshViewCountEXT = */ 4,
     /* .maxDualSourceDrawBuffersEXT = */ 1,
 
-    /* .limits = */
-    {
+    /* .limits = */ {
         /* .nonInductiveForLoops = */ 1,
         /* .whileLoops = */ 1,
         /* .doWhileLoops = */ 1,
@@ -224,261 +499,8 @@ constexpr TBuiltInResource defaultTBuiltInResource = {
         /* .generalSamplerIndexing = */ 1,
         /* .generalVariableIndexing = */ 1,
         /* .generalConstantMatrixVectorIndexing = */ 1,
-    }};
+    } };
 
-using lookup =
-    std::map<std::string, std::function<std::string(const std::string &)>>;
-
-enum class ShaderCodeFlags { NONE = 0, REQUIRED = 1 };
-
-NLOHMANN_JSON_SERIALIZE_ENUM(ShaderCodeFlags,
-                             {{ShaderCodeFlags::NONE, "none"},
-                              {ShaderCodeFlags::REQUIRED, "required"}})
-
-enum class OutputType { ERROR, TEXT, BINARY };
-
-SPR_NODISCARD inline bool isRequired(const ShaderCodeFlags flag) {
-  return (int)flag & (int)ShaderCodeFlags::REQUIRED;
-}
-
-template <class T>
-SPR_NODISCARD inline bool isInDependency(T &dependency, T &dependsOn) {
-  const auto endItr = end(dependency);
-  for (auto target : dependsOn) {
-    auto itr = begin(dependency);
-    if (std::find(itr, endItr, target) == endItr)
-      return false;
-  }
-  return true;
-}
-
-struct ShaderCodes {
-  std::vector<std::string> code;
-  ShaderCodeFlags flags = ShaderCodeFlags::NONE;
-  std::vector<std::string> dependsOn;
-
-  friend void to_json(nlohmann::json &nlohmann_json_j,
-                      const ShaderCodes &nlohmann_json_t) {
-    NLOHMANN_JSON_TO(code);
-    SPR_OPTIONAL_TO(flags);
-    SPR_OPTIONAL_TO_L(dependsOn);
-  }
-
-  friend void from_json(const nlohmann::json &nlohmann_json_j,
-                        ShaderCodes &nlohmann_json_t) {
-    NLOHMANN_JSON_FROM(code);
-    SPR_OPTIONAL_FROM(flags);
-    SPR_OPTIONAL_FROM(dependsOn);
-  }
-};
-
-struct GenerateInput {
-  const std::vector<ShaderCodes> &codes;
-  const std::vector<std::string> &dependencies;
-  const nlohmann::json &settings;
-};
-
-struct GenerateOutput {
-  std::string output;
-  OutputType type = OutputType::ERROR;
-  std::vector<unsigned int> data;
-};
-
-class PermuteText {
-public:
-  SPR_NODISCARD inline static GenerateOutput
-  generate(const GenerateInput input) {
-    std::stringstream buffer;
-    for (const auto &code : input.codes) {
-      if (isRequired(code.flags) || code.dependsOn.empty() ||
-          isInDependency(input.dependencies, code.dependsOn)) {
-        for (const auto &codePart : code.code)
-          buffer << codePart << std::endl;
-      }
-    }
-    return {std::move(buffer.str()), OutputType::TEXT};
-  }
-};
-
-inline void postProcess(std::string &codePart, const lookup &callback) {
-  if (callback.empty())
-    return;
-  auto eItr = end(codePart);
-  auto startWordItr = eItr;
-  auto paramStartItr = eItr;
-  lookup::value_type::second_type func(nullptr);
-  for (auto itr = codePart.begin(); itr != eItr; itr++) {
-    if (*itr == '$') {
-      startWordItr = itr + 1;
-      continue;
-    }
-    if (startWordItr != eItr && *itr == '_') {
-      const auto word = std::string(startWordItr, itr);
-      const auto fncItr = callback.find(word);
-      if (fncItr != end(callback)) {
-        func = fncItr->second;
-        paramStartItr = itr + 1;
-      } else {
-        startWordItr = eItr;
-      }
-      continue;
-    }
-    if (startWordItr != eItr && *itr == ' ') {
-      const std::string param(paramStartItr, itr);
-      const auto replace = func(param);
-      const auto distance = std::distance(startWordItr, itr);
-      codePart = codePart.replace(startWordItr - 1, itr, replace);
-      eItr = end(codePart);
-      itr = begin(codePart) + distance;
-      startWordItr = eItr;
-    }
-  }
-}
-
-#ifndef SPR_NO_GLSL
-struct GlslSettings {
-  EShLanguage shaderType;
-  glslang::EShClient targetClient = glslang::EShClient::EShClientVulkan;
-  glslang::EShTargetClientVersion targetVersion =
-      glslang::EShTargetClientVersion::EShTargetVulkan_1_0;
-  glslang::EShTargetLanguage targetLanguage =
-      glslang::EShTargetLanguage::EShTargetSpv;
-  glslang::EShTargetLanguageVersion targetLanguageVersion =
-      glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
-
-  friend void to_json(nlohmann::json &nlohmann_json_j,
-                      const GlslSettings &nlohmann_json_t) {
-    NLOHMANN_JSON_TO(shaderType);
-    SPR_OPTIONAL_TO(targetClient);
-    SPR_OPTIONAL_TO(targetVersion);
-    SPR_OPTIONAL_TO(targetLanguage);
-    SPR_OPTIONAL_TO(targetLanguageVersion);
-  }
-
-  friend void from_json(const nlohmann::json &nlohmann_json_j,
-                        GlslSettings &nlohmann_json_t) {
-    NLOHMANN_JSON_FROM(shaderType);
-    SPR_OPTIONAL_FROM(targetClient);
-    SPR_OPTIONAL_FROM(targetVersion);
-    SPR_OPTIONAL_FROM(targetLanguage);
-    SPR_OPTIONAL_FROM(targetLanguageVersion);
-  }
-};
-
-SPR_STATIC std::map<std::string, int> lookupCounter;
-
-SPR_STATIC std::string next(const std::string &input) {
-  const auto id = lookupCounter[input];
-  lookupCounter[input]++;
-#ifdef SPR_USE_FORMAT_LIB
-  if (input == "ublock")
-    return std::format("layout(binding={}) uniform BLOCK{}", id, id);
-  return std::format("layout(location={}) {}", id, input);
-#else
-  std::stringstream strStream;
-  if (input == "ublock") {
-    strStream << "layout(binding=" << id << ") uniform BLOCK" << id;
-  } else {
-    strStream << "layout(location=" << id << ") " << input;
-  }
-  return strStream.str();
-#endif
-}
-
-SPR_STATIC lookup glslLookup = {{"next", next}};
-
-class ShaderTraverser;
-static std::vector<permute::ShaderTraverser *> traverser;
-
-class ShaderTraverser {
-public:
-  ShaderTraverser() { permute::traverser.push_back(this); }
-
-  ~ShaderTraverser() {
-    permute::traverser.erase(
-        std::remove(begin(permute::traverser), end(permute::traverser), this));
-  }
-
-  virtual void visitSymbol(glslang::TIntermSymbol *) {}
-  virtual void visitConstantUnion(glslang::TIntermConstantUnion *) {}
-  virtual bool visitBinary(glslang::TVisit, glslang::TIntermBinary *) {
-    return true;
-  }
-  virtual bool visitUnary(glslang::TVisit, glslang::TIntermUnary *) {
-    return true;
-  }
-  virtual bool visitSelection(glslang::TVisit, glslang::TIntermSelection *) {
-    return true;
-  }
-  virtual bool visitAggregate(glslang::TVisit, glslang::TIntermAggregate *) {
-    return true;
-  }
-  virtual bool visitLoop(glslang::TVisit, glslang::TIntermLoop *) {
-    return true;
-  }
-  virtual bool visitBranch(glslang::TVisit, glslang::TIntermBranch *) {
-    return true;
-  }
-  virtual bool visitSwitch(glslang::TVisit, glslang::TIntermSwitch *) {
-    return true;
-  }
-  virtual void postProcess() {}
-  virtual bool isValid(const GlslSettings &settings) = 0;
-};
-
-namespace impl {
-
-class ShaderTraverser : public glslang::TIntermTraverser {
-public:
-  permute::ShaderTraverser *traverser;
-
-  ShaderTraverser(permute::ShaderTraverser *traverser) : traverser(traverser) {}
-
-  virtual void visitSymbol(glslang::TIntermSymbol *s) {
-    traverser->visitSymbol(s);
-  }
-
-  virtual void visitConstantUnion(glslang::TIntermConstantUnion *s) {
-    traverser->visitConstantUnion(s);
-  }
-
-  virtual bool visitBinary(glslang::TVisit v, glslang::TIntermBinary *s) {
-    return traverser->visitBinary(v, s);
-  }
-  virtual bool visitUnary(glslang::TVisit v, glslang::TIntermUnary *s) {
-    return traverser->visitUnary(v, s);
-  }
-  virtual bool visitSelection(glslang::TVisit v, glslang::TIntermSelection *s) {
-    return traverser->visitSelection(v, s);
-  }
-  virtual bool visitAggregate(glslang::TVisit v, glslang::TIntermAggregate *s) {
-    return traverser->visitAggregate(v, s);
-  }
-  virtual bool visitLoop(glslang::TVisit v, glslang::TIntermLoop *s) {
-    return traverser->visitLoop(v, s);
-  }
-  virtual bool visitBranch(glslang::TVisit v, glslang::TIntermBranch *s) {
-    return traverser->visitBranch(v, s);
-  }
-  virtual bool visitSwitch(glslang::TVisit v, glslang::TIntermSwitch *s) {
-    return traverser->visitSwitch(v, s);
-  }
-};
-
-} // namespace impl
-
-#ifdef SPR_MATERIALX
-class PermuteMaterialX {
-public:
-  SPR_NODISCARD inline static GenerateOutput
-  generate(const GenerateInput input) {
-    auto generator = MaterialX::GlslShaderGenerator::create();
-    auto doc = MaterialX::Document::createDocument();
-    generator->registerShaderMetadata()
-    auto shader = generator->generate("", );
-  }
-};
-#endif // SPR_NO_MATERIALX
 
 class PermuteGLSL {
 public:
@@ -490,20 +512,30 @@ public:
       return output;
     try {
       postProcess(output.output, glslLookup);
-      auto stringPtr = output.output.c_str();
-      const GlslSettings settings = input.settings.get<GlslSettings>();
-      glslang::TShader shader(settings.shaderType);
-      shader.setStrings(&stringPtr, 1);
-      shader.setEnvInput(glslang::EShSourceGlsl, settings.shaderType,
-                         settings.targetClient, 100);
-      shader.setEnvClient(settings.targetClient, settings.targetVersion);
-      shader.setEnvTarget(settings.targetLanguage,
-                          settings.targetLanguageVersion);
-      if (!shader.parse(&defaultTBuiltInResource, 450, false,
-                        EShMessages::EShMsgVulkanRules)) {
-        return {shader.getInfoLog(), OutputType::ERROR};
+#if defined(DEBUG) && !defined(SPR_NO_DEBUG_OUTPUT)
+      for (auto &str : output.output) {
+        printf("%s\n", str.c_str());
       }
-      const auto interm = shader.getIntermediate();
+#endif // DEBUG
+      auto stringPtr = output.output;
+      std::vector<const char *> cstrings;
+      cstrings.resize(stringPtr.size());
+      for (size_t i = 0; i < stringPtr.size(); i++) {
+        cstrings[i] = stringPtr[i].c_str();
+      }
+      const GlslSettings settings = input.settings.get<GlslSettings>();
+      auto shader = new glslang::TShader(settings.shaderType);
+      shader->setStrings(cstrings.data(), cstrings.size());
+      shader->setEnvInput(glslang::EShSourceGlsl, settings.shaderType,
+                          settings.targetClient, 100);
+      shader->setEnvClient(settings.targetClient, settings.targetVersion);
+      shader->setEnvTarget(settings.targetLanguage,
+                           settings.targetLanguageVersion);
+      if (!shader->parse(&DefaultTBuiltInResource, 450, EProfile::ENoProfile, false, false,
+                         EShMessages::EShMsgVulkanRules)) {
+        return {{shader->getInfoLog()}, OutputType::ERROR};
+      }
+      const auto interm = shader->getIntermediate();
       const auto node = interm->getTreeRoot();
       for (const auto travPtr : traverser) {
         if (!travPtr->isValid(settings))
@@ -515,11 +547,13 @@ public:
       std::vector<unsigned int> outputData;
       glslang::GlslangToSpv(*interm, outputData);
       return {std::move(output.output), OutputType::BINARY,
-              std::move(outputData)};
-    } catch (const std::exception &) {
-      return {"Could not parse glsl settings!", OutputType::ERROR};
+              std::move(outputData), shader};
+    } catch (const std::exception &e) {
+      return {{"Could not parse glsl settings!", std::string(e.what())},
+              OutputType::ERROR};
     }
-    return {};
+    return {{"Undefined error!"},
+            OutputType::ERROR};
   }
 };
 
@@ -544,7 +578,9 @@ public:
     return output.type != OutputType::ERROR;
   }
 
-  SPR_NODISCARD inline std::string getContent() const { return output.output; }
+  SPR_NODISCARD inline std::vector<std::string> getContent() const {
+    return output.output;
+  }
 
   SPR_NODISCARD inline std::vector<unsigned int> getBinary() const {
     if (output.type != OutputType::BINARY)
@@ -553,6 +589,8 @@ public:
   }
 
   SPR_NODISCARD inline nlohmann::json getSettings() const { return settings; }
+
+  SPR_NODISCARD inline void *getCostumData() const { return output.costumData; }
 
   template <class Settings> SPR_NODISCARD inline Settings getSettings() const {
     return settings.get<Settings>();
