@@ -1,7 +1,9 @@
-﻿cmake_minimum_required (VERSION 3.8)
+﻿cmake_minimum_required (VERSION 3.15)
 
 add_executable (ShaderPermuteTest "ShaderPermuteTest.cpp")
 file(COPY basicTest.json lightPassFrag.json lightPassVert.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+include(FetchContent)
 
 FetchContent_Declare(
   googletest
@@ -16,7 +18,7 @@ include(GoogleTest)
 target_link_libraries(ShaderPermuteTest PUBLIC gtest_main)
 
 # The commands to add to your own project for glsl compiler support
-target_link_libraries(ShaderPermuteTest PUBLIC glslang SPIRV)
-target_include_directories(ShaderPermuteTest PUBLIC ${glslang_SOURCE_DIR} ${materialx_SOURCE_DIR}/include)
+target_link_libraries(ShaderPermuteTest PUBLIC glslang SPIRV SPIRV-Tools)
+target_include_directories(ShaderPermuteTest PUBLIC submodules/glslang)
 
 gtest_add_tests(TARGET ShaderPermuteTest)

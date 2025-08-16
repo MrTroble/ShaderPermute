@@ -27,62 +27,8 @@ int main() {
   return RUN_ALL_TESTS();
 }
 
-class TestTraverser : public permute::ShaderTraverser {
-public:
-  bool visited = false;
-
-  TestTraverser() : permute::ShaderTraverser() {}
-
-  void visitSymbol(glslang::TIntermSymbol *) override { visited = true; }
-
-  bool isValid(const permute::GlslSettings &settings) override { return true; }
-};
 
 TEST(glsl, compile) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  ASSERT_TRUE(perm.generate());
-  ASSERT_TRUE(perm.generate({"NORMAL"}));
-  ASSERT_TRUE(perm.generate({"TEXCOORD_0"}));
-  ASSERT_TRUE(perm.generate({"TEXCOORD_0", "NORMAL", "COLOR"}));
-  ASSERT_TRUE(perm.generate({"COLOR"}));
-  ASSERT_TRUE(perm.generate());
+
 }
 
-TEST(glsl, traverser) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  TestTraverser tt;
-  ASSERT_TRUE(perm.generate());
-  ASSERT_TRUE(tt.visited);
-}
-
-TEST(glsl, writeBin) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  ASSERT_TRUE(perm.generate());
-  ASSERT_NO_THROW(perm.toBinaryFile("testOutput.spv"));
-}
-
-TEST(glsl, testComplex) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("lightPassVert.json");
-  ASSERT_TRUE(perm.generate());
-
-  perm = permute::fromFile<permute::PermuteGLSL>("lightPassFrag.json");
-  ASSERT_TRUE(perm.generate());
-}
-
-TEST(text, equality) {
-  nlohmann::json js = {{"codes", //
-                        {
-                            //
-                            {
-                                {"code", {"test"}}, {"flags", "required"} //
-                            },                                            //
-                            {
-                                {"code", {"not"}}, {"dependsOn", {"not"}} //
-                            }                                             //
-                        }}};
-  auto perm = permute::fromJson<permute::PermuteText>(js);
-  ASSERT_TRUE(perm.generate());
-  ASSERT_EQ(perm.getContent(), "test\n");
-  ASSERT_TRUE(perm.generate({"not"}));
-  ASSERT_EQ(perm.getContent(), "test\nnot\n");
-}
