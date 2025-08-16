@@ -29,6 +29,23 @@ int main() {
 
 
 TEST(glsl, compile) {
+	permute::Permute permute;
+	
+	auto glslPermutation = permute.fromFile("basicTest.vert");
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
+}
 
+TEST(glsl, compileWithDeps) {
+	permute::Permute permute;
+
+	auto glslPermutation = permute.fromFile("basicTest.vert");
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
+
+	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	ASSERT_TRUE(secondResult) << secondResult.error;
+	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
+	// TODO Test more
 }
 

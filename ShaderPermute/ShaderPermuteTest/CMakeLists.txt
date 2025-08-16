@@ -1,7 +1,7 @@
 ﻿cmake_minimum_required (VERSION 3.15)
 
 add_executable (ShaderPermuteTest "ShaderPermuteTest.cpp")
-file(COPY basicTest.json lightPassFrag.json lightPassVert.json DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY basicTest.vert lightPassFrag.frag lightPassVert.vert DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 include(FetchContent)
 

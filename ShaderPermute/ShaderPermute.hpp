@@ -348,7 +348,7 @@ namespace permute {
 
 	struct Dependency {
 		std::string name;
-		std::string value;
+		std::string value = "1";
 	};
 
 	enum ResultType
@@ -392,15 +392,22 @@ namespace permute {
 		}
 
 		SPR_NODISCARD inline ResultOrError
-			generate(const std::vector<Dependency>& dependcies) const {
+			generate(const std::vector<Dependency>& dependcies = {}) const {
+			std::stringstream inputDataDefsStream;
+			for (const auto& dep : dependcies)
+			{
+				inputDataDefsStream << "#define " << dep.name << " " << dep.value << "\n";
+			}
+			auto preamble = inputDataDefsStream.str();
 			auto shader = new glslang::TShader(settings.shaderType);
-			shader->setStrings(input.data(), input.size());
+			shader->setPreamble(preamble.c_str());
+			shader->setStrings(input.data(), static_cast<int>(input.size()));
 			shader->setEnvInput(glslang::EShSourceGlsl, settings.shaderType,
 				settings.targetClient, 100);
 			shader->setEnvClient(settings.targetClient, settings.targetVersion);
 			shader->setEnvTarget(settings.targetLanguage,
 				settings.targetLanguageVersion);
-			if (!shader->parse(&DefaultTBuiltInResource, 450, EProfile::ENoProfile, false, false,
+			if (!shader->parse(&DefaultTBuiltInResource, 460, EProfile::ECoreProfile, false, true,
 				EShMessages::EShMsgVulkanRules)) {
 				return ResultOrError{shader->getInfoLog()};
 			}
@@ -422,7 +429,16 @@ namespace permute {
 
 	struct Permute {
 		GlslSettings settings = {};
-	    std::unordered_map<std::string, std::string> inputMap;
+	    std::unordered_map<std::string, std::vector<std::string>> inputMap;
+
+		Permute() {
+			glslang::InitializeProcess();
+		}
+
+		~Permute()
+		{
+			glslang::FinalizeProcess();
+		}
 
 		inline PermuteGLSL getGLSLPermute(const std::string& name) const {
 			auto iterator = inputMap.find(name);
@@ -433,20 +449,25 @@ namespace permute {
 				throw std::runtime_error(ss.str());
 			}
 #endif // !NDEBUG
-			return PermuteGLSL(settings, std::vector<const char*>{ iterator->second.c_str() });
+			const auto& stringValues = iterator->second;
+			std::vector<const char*> inputs(stringValues.size());
+			std::transform(stringValues.begin(), stringValues.end(),
+				inputs.begin(), [](const std::string& str) { return str.c_str(); });
+			return PermuteGLSL(settings, std::move(inputs));
 		}
 
 #ifndef SPR_NO_FSTREAM
 		inline PermuteGLSL fromFile(const std::string& path) {
-			std::ifstream inputfile(path, std::ios_base::ate);
+			std::ifstream inputfile(path);
 			if (!inputfile)
 				throw std::runtime_error("File not found!");
-			auto positionTo = inputfile.tellg();
-			inputfile.seekg(0, std::ios_base::beg);
-			std::string input;
-			input.resize(static_cast<size_t>(positionTo));
-			inputfile.read(input.data(), positionTo);
-			inputMap[path] = std::move(input);
+			std::vector<std::string> inputs;
+			inputs.reserve(128);
+			for (std::string input; std::getline(inputfile, input);) {
+				input.append("\n");
+				inputs.push_back(input);
+			}
+			inputMap[path] = std::move(inputs);
 			return getGLSLPermute(path);
 		}
 #endif
