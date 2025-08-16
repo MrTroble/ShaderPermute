@@ -16,9 +16,9 @@
 */
 #pragma once
 
-#define SPR_VERSION_MAJOR 1
+#define SPR_VERSION_MAJOR 2
 #define SPR_VERSION_MINOR 0
-#define SPR_VERSION_PATCH 4
+#define SPR_VERSION_PATCH 0
 
 #ifdef SPR_USE_FORMAT_LIB
 #include <format>
@@ -64,10 +64,6 @@
 #if !defined(SPR_NO_GLSL) && !defined(SPR_NO_GLSL_INCLUDE)
 #include <SPIRV/GlslangToSpv.h>
 #include <glslang/Public/ShaderLang.h>
-#endif
-
-#if defined(SPR_MATERIALX) && !defined(SPR_NO_MATERIALX_INCLUDE)
-#include <MaterialXGenGlsl/GlslShaderGenerator.h>
 #endif
 
 #ifndef SPR_NO_STATIC
@@ -372,18 +368,6 @@ public:
 };
 
 } // namespace impl
-
-#ifdef SPR_MATERIALX
-class PermuteMaterialX {
-public:
-  SPR_NODISCARD inline static GenerateOutput
-  generate(const GenerateInput input) {
-    auto generator = MaterialX::GlslShaderGenerator::create();
-    auto doc = MaterialX::Document::createDocument();
-    generator->registerShaderMetadata() auto shader = generator->generate("", );
-  }
-};
-#endif // SPR_NO_MATERIALX
 
 inline TBuiltInResource InitResources()
 {

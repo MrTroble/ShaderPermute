@@ -10,8 +10,6 @@ FetchContent_Declare(
 
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
-FetchContent_MakeAvailable(glslang)
-FetchContent_MakeAvailable(materialx)
 
 include(GoogleTest)
 
