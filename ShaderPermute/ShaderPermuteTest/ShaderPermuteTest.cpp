@@ -27,62 +27,64 @@ int main() {
   return RUN_ALL_TESTS();
 }
 
+TEST(glsl, compile) {
+	permute::Permute permute;
+	
+	auto glslPermutation = permute.fromFile("basicTest.vert");
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
+
+	auto glslPermutation2 = permute.fromFile("lightPassVert.vert");
+	const auto result2 = glslPermutation2.generate();
+	ASSERT_TRUE(result2) << result2.error;
+	
+	auto glslPermutation3 = permute.fromFile("lightPassFrag.frag");
+	const auto result3 = glslPermutation3.generate();
+	ASSERT_TRUE(result3) << result3.error;
+
+}
+
 class TestTraverser : public permute::ShaderTraverser {
 public:
-  bool visited = false;
+	std::unordered_set<std::string> symbols{};
 
-  TestTraverser() : permute::ShaderTraverser() {}
-
-  void visitSymbol(glslang::TIntermSymbol *) override { visited = true; }
-
-  bool isValid(const permute::GlslSettings &settings) override { return true; }
+	void visitSymbol(glslang::TIntermSymbol* node) override {
+		symbols.insert(node->getName().c_str());
+	}
 };
 
-TEST(glsl, compile) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  ASSERT_TRUE(perm.generate());
-  ASSERT_TRUE(perm.generate({"NORMAL"}));
-  ASSERT_TRUE(perm.generate({"TEXCOORD_0"}));
-  ASSERT_TRUE(perm.generate({"TEXCOORD_0", "NORMAL", "COLOR"}));
-  ASSERT_TRUE(perm.generate({"COLOR"}));
-  ASSERT_TRUE(perm.generate());
+TEST(glsl, compileWithDeps) {
+	permute::Permute permute;
+
+	TestTraverser traverser;
+
+	auto glslPermutation = permute.fromFile("basicTest.vert");
+	glslPermutation.traverser.push_back(&traverser);
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
+	ASSERT_FALSE(traverser.symbols.contains("COLOR"));
+	traverser.symbols.clear();
+
+	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	ASSERT_TRUE(secondResult) << secondResult.error;
+	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
+	ASSERT_TRUE(traverser.symbols.contains("COLOR"));
 }
 
-TEST(glsl, traverser) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  TestTraverser tt;
-  ASSERT_TRUE(perm.generate());
-  ASSERT_TRUE(tt.visited);
-}
+TEST(glsl, compileWithDepsAndAllCache) {
+	permute::Permute permute;
 
-TEST(glsl, writeBin) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("basicTest.json");
-  ASSERT_TRUE(perm.generate());
-  ASSERT_NO_THROW(perm.toBinaryFile("testOutput.spv"));
-}
+	auto glslPermutation = permute.fromFile<permute::AllChache>("basicTest.vert");
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
 
-TEST(glsl, testComplex) {
-  auto perm = permute::fromFile<permute::PermuteGLSL>("lightPassVert.json");
-  ASSERT_TRUE(perm.generate());
+	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	ASSERT_TRUE(secondResult) << secondResult.error;
+	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
 
-  perm = permute::fromFile<permute::PermuteGLSL>("lightPassFrag.json");
-  ASSERT_TRUE(perm.generate());
-}
-
-TEST(text, equality) {
-  nlohmann::json js = {{"codes", //
-                        {
-                            //
-                            {
-                                {"code", {"test"}}, {"flags", "required"} //
-                            },                                            //
-                            {
-                                {"code", {"not"}}, {"dependsOn", {"not"}} //
-                            }                                             //
-                        }}};
-  auto perm = permute::fromJson<permute::PermuteText>(js);
-  ASSERT_TRUE(perm.generate());
-  ASSERT_EQ(perm.getContent(), "test\n");
-  ASSERT_TRUE(perm.generate({"not"}));
-  ASSERT_EQ(perm.getContent(), "test\nnot\n");
+	for (size_t i = 0; i < 100; i++)
+	{
+		const auto thirdResult = glslPermutation.generate({ {"REQ_COLOR"} });
+		ASSERT_TRUE(thirdResult) << thirdResult.error;
+	}
 }
