@@ -112,20 +112,6 @@ namespace glslang {
 } // namespace glslang
 
 namespace permute {
-
-	using lookup =
-		std::map<std::string, std::function<std::string(const std::string&)>>;
-
-	enum class ShaderCodeFlags { NONE = 0, REQUIRED = 1 };
-
-	NLOHMANN_JSON_SERIALIZE_ENUM(ShaderCodeFlags,
-		{ {ShaderCodeFlags::NONE, "none"},
-		 {ShaderCodeFlags::REQUIRED, "required"} })
-
-		SPR_NODISCARD inline bool isRequired(const ShaderCodeFlags flag) {
-		return (int)flag & (int)ShaderCodeFlags::REQUIRED;
-	}
-
 	struct GlslSettings {
 		EShLanguage shaderType;
 		glslang::EShClient targetClient = glslang::EShClient::EShClientVulkan;
@@ -353,6 +339,40 @@ namespace permute {
 		}
 	};
 
+	inline EShLanguage getLanguageFromExtension(const std::string& ext) {
+		if (ext == ".vert" || ext == ".vsh" || ext == ".vs")
+			return EShLangVertex;
+		else if (ext == ".tesc" || ext == ".tcs")
+			return EShLangTessControl;
+		else if (ext == ".tese" || ext == ".tes")
+			return EShLangTessEvaluation;
+		else if (ext == ".geom" || ext == ".gsh")
+			return EShLangGeometry;
+		else if (ext == ".frag" || ext == ".fsh" || ext == ".fs")
+			return EShLangFragment;
+		else if (ext == ".comp" || ext == ".csh")
+			return EShLangCompute;
+		else if (ext == ".rgen")
+			return EShLangRayGen;
+		else if (ext == ".rint")
+			return EShLangIntersect;
+		else if (ext == ".rahit")
+			return EShLangAnyHit;
+		else if (ext == ".rchit")
+			return EShLangClosestHit;
+		else if (ext == ".rmiss")
+			return EShLangMiss;
+		else if (ext == ".rcall")
+			return EShLangCallable;
+		else if (ext == ".tasknv")
+			return EShLangTaskNV;
+		else if (ext == ".meshnv")
+			return EShLangMeshNV;
+		throw std::runtime_error(
+			"Unknown shader extension: " + ext +
+			". Please use one of the following: .vert, .tesc, .tese, .geom, .frag, .comp, .rgen, .rint, .rahit, .rchit, .rmiss, .rcall, .tasknv or .meshnv");
+	}
+
 	struct Permute {
 		GlslSettings settings = {};
 	    std::unordered_map<std::string, std::vector<std::string>> inputMap;
@@ -380,6 +400,9 @@ namespace permute {
 			std::vector<const char*> inputs(stringValues.size());
 			std::transform(stringValues.begin(), stringValues.end(),
 				inputs.begin(), [](const std::string& str) { return str.c_str(); });
+			GlslSettings settings = this->settings;
+			settings.shaderType = getLanguageFromExtension(
+				name.substr(name.find_last_of('.')));
 			PermuteGLSL glsl(settings, std::move(inputs));
 			glsl.traverser = traverser;
 			return glsl;

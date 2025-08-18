@@ -33,6 +33,15 @@ TEST(glsl, compile) {
 	auto glslPermutation = permute.fromFile("basicTest.vert");
 	const auto firstResult = glslPermutation.generate();
 	ASSERT_TRUE(firstResult) << firstResult.error;
+
+	auto glslPermutation2 = permute.fromFile("lightPassVert.vert");
+	const auto result2 = glslPermutation2.generate();
+	ASSERT_TRUE(result2) << result2.error;
+	
+	auto glslPermutation3 = permute.fromFile("lightPassFrag.frag");
+	const auto result3 = glslPermutation3.generate();
+	ASSERT_TRUE(result3) << result3.error;
+
 }
 
 class TestTraverser : public permute::ShaderTraverser {
