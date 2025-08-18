@@ -69,6 +69,22 @@ TEST(glsl, compileWithDeps) {
 	ASSERT_TRUE(secondResult) << secondResult.error;
 	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
 	ASSERT_TRUE(traverser.symbols.contains("COLOR"));
-	// TODO Test more
 }
 
+TEST(glsl, compileWithDepsAndAllCache) {
+	permute::Permute permute;
+
+	auto glslPermutation = permute.fromFile<permute::AllChache>("basicTest.vert");
+	const auto firstResult = glslPermutation.generate();
+	ASSERT_TRUE(firstResult) << firstResult.error;
+
+	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	ASSERT_TRUE(secondResult) << secondResult.error;
+	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
+
+	for (size_t i = 0; i < 100; i++)
+	{
+		const auto thirdResult = glslPermutation.generate({ {"REQ_COLOR"} });
+		ASSERT_TRUE(thirdResult) << thirdResult.error;
+	}
+}

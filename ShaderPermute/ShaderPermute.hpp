@@ -292,21 +292,43 @@ namespace permute {
 
 	
 	struct NoChache {
-		inline std::optional<ResultOrError> get(const std::string& dependencies) const {
+		SPR_NODISCARD inline std::optional<ResultOrError> get(const std::string& dependencies) const {
 			return std::optional<ResultOrError>();
 		}
+
+		SPR_NODISCARD inline void add(const std::string& dependencies, const ResultOrError& result) {}
 	};
 	
-	template<typename T>
-	concept CacheConcept = requires(const T& cache, const std::string& dependencies) {
-		{ cache.get(dependencies) } -> std::same_as<std::optional<ResultOrError>>;
+	struct AllChache {
+
+		std::unordered_map<std::string, ResultOrError> cache;
+
+		SPR_NODISCARD inline std::optional<ResultOrError> get(const std::string& dependencies) const {
+			auto iterator = cache.find(dependencies);
+			if(iterator != cache.end()) {
+				return std::optional<ResultOrError>(iterator->second);
+			}
+			return std::optional<ResultOrError>();
+		}
+
+		SPR_NODISCARD inline void add(const std::string& dependencies, const ResultOrError& result) {
+			cache.emplace(dependencies, result);
+		}
 	};
+
+	template<typename T>
+	concept CacheConcept = requires(const T& cache, T & cacheNoConst, const std::string& dependencies, const ResultOrError& result) {
+		{ cache.get(dependencies) } -> std::same_as<std::optional<ResultOrError>>;
+		{ cacheNoConst.add(dependencies, result) };
+	};
+	static_assert(CacheConcept<NoChache>, "NoChache must implement CacheConcept");
+	static_assert(CacheConcept<AllChache>, "AllChache must implement CacheConcept");
 
 	template<CacheConcept T = NoChache>
 	class PermuteGLSL {
 		GlslSettings settings;
 		std::vector<const char*> input;
-		T cache{};
+		mutable T cache{};
 
 	public:
 		using CacheType = T;
@@ -354,8 +376,9 @@ namespace permute {
 			}
 			std::vector<unsigned int> outputData;
 			glslang::GlslangToSpv(*interm, outputData);
-			return ResultOrError{ std::move(outputData) };
-
+			ResultOrError result{ std::move(outputData) };
+			cache.add(preamble, result);
+			return result;
 		}
 	};
 
@@ -424,7 +447,7 @@ namespace permute {
 			GlslSettings settings = this->settings;
 			settings.shaderType = getLanguageFromExtension(
 				name.substr(name.find_last_of('.')));
-			PermuteGLSL glsl(settings, std::move(inputs));
+			PermuteGLSL<T> glsl(settings, std::move(inputs));
 			glsl.traverser = traverser;
 			return glsl;
 		}
@@ -441,7 +464,7 @@ namespace permute {
 			}
 #endif // !NDEBUG
 			inputMap[name] = std::move(input);
-			return getGLSLPermute(name);
+			return getGLSLPermute<T>(name);
 		}
 
 #ifndef SPR_NO_FSTREAM
@@ -456,7 +479,7 @@ namespace permute {
 				input.append("\n");
 				inputs.push_back(input);
 			}
-			return fromStrings(path, std::move(inputs));
+			return fromStrings<T>(path, std::move(inputs));
 		}
 #endif
 	};
