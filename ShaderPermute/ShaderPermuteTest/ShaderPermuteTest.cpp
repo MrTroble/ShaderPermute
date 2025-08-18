@@ -72,7 +72,7 @@ TEST(glsl, compileWithDeps) {
 }
 
 TEST(glsl, compileWithDepsAndAllCache) {
-	permute::Permute<permute::AllChache> permute;
+	permute::Permute<permute::AllCache> permute;
 
 	auto glslPermutation = permute.fromFile("basicTest.vert");
 	const auto firstResult = glslPermutation->generate();
