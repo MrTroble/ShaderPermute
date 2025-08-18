@@ -27,7 +27,6 @@ int main() {
   return RUN_ALL_TESTS();
 }
 
-
 TEST(glsl, compile) {
 	permute::Permute permute;
 	
@@ -36,16 +35,31 @@ TEST(glsl, compile) {
 	ASSERT_TRUE(firstResult) << firstResult.error;
 }
 
+class TestTraverser : public permute::ShaderTraverser {
+public:
+	std::unordered_set<std::string> symbols{};
+
+	void visitSymbol(glslang::TIntermSymbol* node) override {
+		symbols.insert(node->getName().c_str());
+	}
+};
+
 TEST(glsl, compileWithDeps) {
 	permute::Permute permute;
 
+	TestTraverser traverser;
+
 	auto glslPermutation = permute.fromFile("basicTest.vert");
+	glslPermutation.traverser.push_back(&traverser);
 	const auto firstResult = glslPermutation.generate();
 	ASSERT_TRUE(firstResult) << firstResult.error;
+	ASSERT_FALSE(traverser.symbols.contains("COLOR"));
+	traverser.symbols.clear();
 
 	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
 	ASSERT_TRUE(secondResult) << secondResult.error;
 	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
+	ASSERT_TRUE(traverser.symbols.contains("COLOR"));
 	// TODO Test more
 }
 

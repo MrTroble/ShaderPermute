@@ -155,85 +155,11 @@ namespace permute {
 		}
 	};
 
-	class ShaderTraverser;
-	static std::vector<permute::ShaderTraverser*> traverser;
-
-	class ShaderTraverser {
+	class ShaderTraverser : public glslang::TIntermTraverser {
 	public:
-		ShaderTraverser() { permute::traverser.push_back(this); }
-
-		~ShaderTraverser() {
-			permute::traverser.erase(
-				std::remove(begin(permute::traverser), end(permute::traverser), this));
-		}
-
-		virtual void visitSymbol(glslang::TIntermSymbol*) {}
-		virtual void visitConstantUnion(glslang::TIntermConstantUnion*) {}
-		virtual bool visitBinary(glslang::TVisit, glslang::TIntermBinary*) {
-			return true;
-		}
-		virtual bool visitUnary(glslang::TVisit, glslang::TIntermUnary*) {
-			return true;
-		}
-		virtual bool visitSelection(glslang::TVisit, glslang::TIntermSelection*) {
-			return true;
-		}
-		virtual bool visitAggregate(glslang::TVisit, glslang::TIntermAggregate*) {
-			return true;
-		}
-		virtual bool visitLoop(glslang::TVisit, glslang::TIntermLoop*) {
-			return true;
-		}
-		virtual bool visitBranch(glslang::TVisit, glslang::TIntermBranch*) {
-			return true;
-		}
-		virtual bool visitSwitch(glslang::TVisit, glslang::TIntermSwitch*) {
-			return true;
-		}
 		virtual void postProcess() {}
-		virtual bool isValid(const GlslSettings& settings) = 0;
+		virtual bool isValid(const GlslSettings& settings) { return true; };
 	};
-
-	namespace impl {
-
-		class ShaderTraverser : public glslang::TIntermTraverser {
-		public:
-			permute::ShaderTraverser* traverser;
-
-			ShaderTraverser(permute::ShaderTraverser* traverser) : traverser(traverser) {}
-
-			virtual void visitSymbol(glslang::TIntermSymbol* s) {
-				traverser->visitSymbol(s);
-			}
-
-			virtual void visitConstantUnion(glslang::TIntermConstantUnion* s) {
-				traverser->visitConstantUnion(s);
-			}
-
-			virtual bool visitBinary(glslang::TVisit v, glslang::TIntermBinary* s) {
-				return traverser->visitBinary(v, s);
-			}
-			virtual bool visitUnary(glslang::TVisit v, glslang::TIntermUnary* s) {
-				return traverser->visitUnary(v, s);
-			}
-			virtual bool visitSelection(glslang::TVisit v, glslang::TIntermSelection* s) {
-				return traverser->visitSelection(v, s);
-			}
-			virtual bool visitAggregate(glslang::TVisit v, glslang::TIntermAggregate* s) {
-				return traverser->visitAggregate(v, s);
-			}
-			virtual bool visitLoop(glslang::TVisit v, glslang::TIntermLoop* s) {
-				return traverser->visitLoop(v, s);
-			}
-			virtual bool visitBranch(glslang::TVisit v, glslang::TIntermBranch* s) {
-				return traverser->visitBranch(v, s);
-			}
-			virtual bool visitSwitch(glslang::TVisit v, glslang::TIntermSwitch* s) {
-				return traverser->visitSwitch(v, s);
-			}
-		};
-
-	} // namespace impl
 
 	inline TBuiltInResource InitResources()
 	{
@@ -343,8 +269,7 @@ namespace permute {
 
 		return Resources;
 	}
-	const TBuiltInResource DefaultTBuiltInResource = InitResources();
-
+	static const TBuiltInResource DefaultTBuiltInResource = InitResources();
 
 	struct Dependency {
 		std::string name;
@@ -383,6 +308,8 @@ namespace permute {
 		GlslSettings settings;
 		std::vector<const char*> input;
 	public:
+		std::vector<ShaderTraverser*> traverser;
+
 		PermuteGLSL(GlslSettings settings, const std::vector<const char*>& input)
 			: settings(settings), input(input) {
 		}
@@ -416,8 +343,7 @@ namespace permute {
 			for (const auto travPtr : traverser) {
 				if (!travPtr->isValid(settings))
 					continue;
-				impl::ShaderTraverser trav(travPtr);
-				node->traverse(&trav);
+				node->traverse(travPtr);
 				travPtr->postProcess();
 			}
 			std::vector<unsigned int> outputData;
@@ -430,6 +356,7 @@ namespace permute {
 	struct Permute {
 		GlslSettings settings = {};
 	    std::unordered_map<std::string, std::vector<std::string>> inputMap;
+		std::vector<ShaderTraverser*> traverser;
 
 		Permute() {
 			glslang::InitializeProcess();
@@ -440,7 +367,7 @@ namespace permute {
 			glslang::FinalizeProcess();
 		}
 
-		inline PermuteGLSL getGLSLPermute(const std::string& name) const {
+		SPR_NODISCARD inline PermuteGLSL getGLSLPermute(const std::string& name) const {
 			auto iterator = inputMap.find(name);
 #ifndef NDEBUG
 			if(iterator == inputMap.end()) {
@@ -453,11 +380,13 @@ namespace permute {
 			std::vector<const char*> inputs(stringValues.size());
 			std::transform(stringValues.begin(), stringValues.end(),
 				inputs.begin(), [](const std::string& str) { return str.c_str(); });
-			return PermuteGLSL(settings, std::move(inputs));
+			PermuteGLSL glsl(settings, std::move(inputs));
+			glsl.traverser = traverser;
+			return glsl;
 		}
 
 #ifndef SPR_NO_FSTREAM
-		inline PermuteGLSL fromFile(const std::string& path) {
+		SPR_NODISCARD inline PermuteGLSL fromFile(const std::string& path) {
 			std::ifstream inputfile(path);
 			if (!inputfile)
 				throw std::runtime_error("File not found!");

@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.15)
+cmake_minimum_required (VERSION 3.20)
 
 set(BUILD_EXTERNAL OFF)
 set(ALLOW_EXTERNAL_SPIRV_TOOLS ON)
