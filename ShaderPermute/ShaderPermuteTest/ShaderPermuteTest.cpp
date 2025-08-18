@@ -31,15 +31,15 @@ TEST(glsl, compile) {
 	permute::Permute permute;
 	
 	auto glslPermutation = permute.fromFile("basicTest.vert");
-	const auto firstResult = glslPermutation.generate();
+	const auto firstResult = glslPermutation->generate();
 	ASSERT_TRUE(firstResult) << firstResult.error;
 
 	auto glslPermutation2 = permute.fromFile("lightPassVert.vert");
-	const auto result2 = glslPermutation2.generate();
+	const auto result2 = glslPermutation2->generate();
 	ASSERT_TRUE(result2) << result2.error;
 	
 	auto glslPermutation3 = permute.fromFile("lightPassFrag.frag");
-	const auto result3 = glslPermutation3.generate();
+	const auto result3 = glslPermutation3->generate();
 	ASSERT_TRUE(result3) << result3.error;
 
 }
@@ -59,32 +59,32 @@ TEST(glsl, compileWithDeps) {
 	TestTraverser traverser;
 
 	auto glslPermutation = permute.fromFile("basicTest.vert");
-	glslPermutation.traverser.push_back(&traverser);
-	const auto firstResult = glslPermutation.generate();
+	glslPermutation->traverser.push_back(&traverser);
+	const auto firstResult = glslPermutation->generate();
 	ASSERT_TRUE(firstResult) << firstResult.error;
 	ASSERT_FALSE(traverser.symbols.contains("COLOR"));
 	traverser.symbols.clear();
 
-	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	const auto secondResult = glslPermutation->generate({ {"REQ_COLOR"} });
 	ASSERT_TRUE(secondResult) << secondResult.error;
 	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
 	ASSERT_TRUE(traverser.symbols.contains("COLOR"));
 }
 
 TEST(glsl, compileWithDepsAndAllCache) {
-	permute::Permute permute;
+	permute::Permute<permute::AllChache> permute;
 
-	auto glslPermutation = permute.fromFile<permute::AllChache>("basicTest.vert");
-	const auto firstResult = glslPermutation.generate();
+	auto glslPermutation = permute.fromFile("basicTest.vert");
+	const auto firstResult = glslPermutation->generate();
 	ASSERT_TRUE(firstResult) << firstResult.error;
 
-	const auto secondResult = glslPermutation.generate({ {"REQ_COLOR"} });
+	const auto secondResult = glslPermutation->generate({ {"REQ_COLOR"} });
 	ASSERT_TRUE(secondResult) << secondResult.error;
 	ASSERT_GT(secondResult.output.size(), firstResult.output.size());
 
 	for (size_t i = 0; i < 100; i++)
 	{
-		const auto thirdResult = glslPermutation.generate({ {"REQ_COLOR"} });
+		const auto thirdResult = glslPermutation->generate({ {"REQ_COLOR"} });
 		ASSERT_TRUE(thirdResult) << thirdResult.error;
 	}
 }
