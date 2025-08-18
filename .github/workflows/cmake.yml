@@ -18,18 +18,12 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Clang
-      uses: egor-tensin/setup-clang@v1
-      with:
-        version: 13
-        platform: x64
-    
+    - uses: actions/checkout@v5
+      submodules: "true"
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_CXX_COMPILER=clang-13 -DCMAKE_CXX_STANDARD=20
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       # Build your program with the given configuration
