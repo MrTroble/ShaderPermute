@@ -290,10 +290,26 @@ namespace permute {
 		}
 	};
 
+	
+	struct NoChache {
+		inline std::optional<ResultOrError> get(const std::string& dependencies) const {
+			return std::optional<ResultOrError>();
+		}
+	};
+	
+	template<typename T>
+	concept CacheConcept = requires(const T& cache, const std::string& dependencies) {
+		{ cache.get(dependencies) } -> std::same_as<std::optional<ResultOrError>>;
+	};
+
+	template<CacheConcept T = NoChache>
 	class PermuteGLSL {
 		GlslSettings settings;
 		std::vector<const char*> input;
+		T cache{};
+
 	public:
+		using CacheType = T;
 		std::vector<ShaderTraverser*> traverser;
 
 		PermuteGLSL(GlslSettings settings, const std::vector<const char*>& input)
@@ -312,6 +328,10 @@ namespace permute {
 				inputDataDefsStream << "#define " << dep.name << " " << dep.value << "\n";
 			}
 			auto preamble = inputDataDefsStream.str();
+			const auto cachedValue = cache.get(preamble);
+			if(cachedValue) {
+				return *cachedValue;
+			}
 			auto shader = new glslang::TShader(settings.shaderType);
 			shader->setPreamble(preamble.c_str());
 			shader->setStrings(input.data(), static_cast<int>(input.size()));
@@ -387,7 +407,8 @@ namespace permute {
 			glslang::FinalizeProcess();
 		}
 
-		SPR_NODISCARD inline PermuteGLSL getGLSLPermute(const std::string& name) const {
+		template<CacheConcept T = NoChache>
+		SPR_NODISCARD inline PermuteGLSL<T> getGLSLPermute(const std::string& name) const {
 			auto iterator = inputMap.find(name);
 #ifndef NDEBUG
 			if(iterator == inputMap.end()) {
@@ -408,8 +429,24 @@ namespace permute {
 			return glsl;
 		}
 
+		template<CacheConcept T = NoChache>
+		SPR_NODISCARD inline PermuteGLSL<T> fromStrings(const std::string& name, std::vector<std::string>&& input) {
+#ifndef NDEBUG
+			const auto value = inputMap.find(name);
+			if(value != inputMap.end()) {
+				std::stringstream ss;
+				ss << "ShaderPermute: Shader with name '" << name
+				   << "' already exists. Please use a different name.";
+				throw std::runtime_error(ss.str());
+			}
+#endif // !NDEBUG
+			inputMap[name] = std::move(input);
+			return getGLSLPermute(name);
+		}
+
 #ifndef SPR_NO_FSTREAM
-		SPR_NODISCARD inline PermuteGLSL fromFile(const std::string& path) {
+		template<CacheConcept T = NoChache>
+		SPR_NODISCARD inline PermuteGLSL<T> fromFile(const std::string& path) {
 			std::ifstream inputfile(path);
 			if (!inputfile)
 				throw std::runtime_error("File not found!");
@@ -419,8 +456,7 @@ namespace permute {
 				input.append("\n");
 				inputs.push_back(input);
 			}
-			inputMap[path] = std::move(inputs);
-			return getGLSLPermute(path);
+			return fromStrings(path, std::move(inputs));
 		}
 #endif
 	};
