@@ -460,7 +460,7 @@ namespace permute {
 			return glsl;
 		}
 
-		SPR_NODISCARD inline PermuteGLSL<T>* fromStrings(const std::string& name, std::vector<std::string>&& input) {
+		inline PermuteGLSL<T>* fromStrings(const std::string& name, std::vector<std::string>&& input) {
 #ifndef NDEBUG
 			const auto value = inputMap.find(name);
 			if(value != inputMap.end()) {
@@ -475,7 +475,7 @@ namespace permute {
 		}
 
 #ifndef SPR_NO_FSTREAM
-		SPR_NODISCARD inline PermuteGLSL<T>* fromFile(const std::string& path) {
+		inline PermuteGLSL<T>* fromFile(const std::string& path) {
 			std::ifstream inputfile(path);
 			if (!inputfile)
 				throw std::runtime_error("File not found!");
