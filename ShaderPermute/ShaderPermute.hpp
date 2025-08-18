@@ -291,7 +291,7 @@ namespace permute {
 	};
 
 	
-	struct NoChache {
+	struct NoCache {
 		SPR_NODISCARD inline std::optional<ResultOrError> get(const std::string& dependencies) const {
 			return std::optional<ResultOrError>();
 		}
@@ -299,7 +299,7 @@ namespace permute {
 		SPR_NODISCARD inline void add(const std::string& dependencies, const ResultOrError& result) {}
 	};
 	
-	struct AllChache {
+	struct AllCache {
 
 		std::unordered_map<std::string, ResultOrError> cache;
 
@@ -321,10 +321,10 @@ namespace permute {
 		{ cache.get(dependencies) } -> std::same_as<std::optional<ResultOrError>>;
 		{ cacheNoConst.add(dependencies, result) };
 	};
-	static_assert(CacheConcept<NoChache>, "NoChache must implement CacheConcept");
-	static_assert(CacheConcept<AllChache>, "AllChache must implement CacheConcept");
+	static_assert(CacheConcept<NoCache>, "NoChache must implement CacheConcept");
+	static_assert(CacheConcept<AllCache>, "AllChache must implement CacheConcept");
 
-	template<CacheConcept T = NoChache>
+	template<CacheConcept T = NoCache>
 	class PermuteGLSL {
 		GlslSettings settings;
 		std::vector<const char*> input;
@@ -416,7 +416,7 @@ namespace permute {
 			". Please use one of the following: .vert, .tesc, .tese, .geom, .frag, .comp, .rgen, .rint, .rahit, .rchit, .rmiss, .rcall, .tasknv or .meshnv");
 	}
 
-	template<CacheConcept T = NoChache>
+	template<CacheConcept T = NoCache>
 	struct Permute {
 		GlslSettings settings = {};
 		std::vector<ShaderTraverser*> traverser;
@@ -445,9 +445,7 @@ namespace permute {
 			}
 			auto iterator = inputMap.find(name);
 			if(iterator == inputMap.end()) {
-				std::stringstream ss;
-				ss << "ShaderPermute: No shader found with name '" << name << "'";
-				throw std::runtime_error(ss.str());
+				return nullptr;
 			}
 			const auto& stringValues = iterator->second;
 			std::vector<const char*> inputs(stringValues.size());
